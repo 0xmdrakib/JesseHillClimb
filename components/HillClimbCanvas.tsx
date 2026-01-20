@@ -33,7 +33,9 @@ const Vec2 = planck.Vec2;
 
 // World scale: Box2D-style sims like 0.1-10m sized objects.
 // We render at ~45 CSS px per meter.
-const SCALE = 45;
+let SCALE = 45;
+const SCALE_MIN = 28;
+const SCALE_MAX = 45;
 // 60Hz is the canonical Box2D/Planck recommendation for high-quality sims.
 // (We still keep iteration counts modest for browser performance.)
 const HZ = 60;
@@ -625,6 +627,13 @@ export const HillClimbCanvas = forwardRef<
       const rect = c.getBoundingClientRect();
       c.width = Math.round(rect.width * devicePixelRatio);
       c.height = Math.round(rect.height * devicePixelRatio);
+      // Responsive zoom: show more world on smaller screens (Mini App / phones)
+      const cssW = rect.width;
+      const cssH = rect.height;
+      const targetMetersX = cssW < 480 ? 12 : 10.5;
+      const targetMetersY = cssH < 720 ? 7.5 : 6.8;
+      const s = Math.min(cssW / targetMetersX, cssH / targetMetersY);
+      SCALE = Math.max(SCALE_MIN, Math.min(SCALE_MAX, s));
     };
 
     window.addEventListener("resize", resize);
