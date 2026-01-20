@@ -1,0 +1,34 @@
+{
+  "accountAssociation": {
+    "header": "",
+    "payload": "",
+    "signature": ""
+  },
+  "miniapp": {
+    "version": "1",
+    "name": "Jesse Hill Climb",
+    "homeUrl": "https://jessehillclimb.online/",
+    "iconUrl": "https://jessehillclimb.online/icon.png",
+    "splashImageUrl": "https://jessehillclimb.online/splash.png",
+    "splashBackgroundColor": "#8fd3ff",
+    "subtitle": "Classic bright hill runner",
+    "description": "Hill Climb game with swappable head and nft minting option.",
+    "tagline": "Drive far. Flip less.",
+    "primaryCategory": "games",
+    "tags": [
+      "games",
+      "racing",
+      "arcade",
+      "miniapp"
+    ],
+    "heroImageUrl": "https://jessehillclimb.online/hero.png",
+    "screenshotUrls": [
+      "https://jessehillclimb.online/embed.png",
+      "https://jessehillclimb.online/hero.png"
+    ],
+    "ogTitle": "Jesse Hill Climb",
+    "ogDescription": "Hill Climb game with swappable head and nft minting option.",
+    "ogImageUrl": "https://jessehillclimb.online/hero.png",
+    "noindex": true
+  }
+}
