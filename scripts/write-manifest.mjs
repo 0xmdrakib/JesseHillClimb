@@ -61,6 +61,14 @@ function main() {
   json.miniapp.ogImageUrl = `${baseUrl}/hero.png`;
   json.miniapp.ogTitle = json.miniapp.ogTitle || json.miniapp.name;
 
+  // If webhookUrl exists (or is a placeholder), keep it aligned to the deploy URL.
+  // Base docs note webhookUrl should be a valid, reachable URL when present.
+  // If you do NOT use notifications, you may remove webhookUrl entirely.
+  const currentWebhook = json.miniapp.webhookUrl;
+  if (!currentWebhook || String(currentWebhook).includes("YOUR_DOMAIN")) {
+    json.miniapp.webhookUrl = `${baseUrl}/api/webhook`;
+  }
+
   const noindex =
     process.env.NEXT_PUBLIC_NOINDEX === "true"
       ? true
