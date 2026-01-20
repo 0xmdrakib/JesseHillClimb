@@ -39,6 +39,8 @@ export async function generateMetadata(): Promise<Metadata> {
       "fc:miniapp": JSON.stringify(embed),
       // Legacy compatibility
       "fc:frame": JSON.stringify(embed),
+      // Base Build verification (from Base Build UI)
+      "base:app_id": "696f2cefc0ab25addaaaf751",
     },
     openGraph: {
       title: APP_NAME,
