@@ -1,15 +1,5 @@
 import "./globals.css";
-import type { Metadata, Viewport } from "next";
-
-// Ensure correct sizing + safe-area insets in mobile webviews (Base/Farcaster)
-export const viewport: Viewport = {
-  width: "device-width",
-  initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
-  viewportFit: "cover",
-};
-
+import type { Metadata } from "next";
 
 // Mini App embed metadata (Base/Farcaster)
 // - Farcaster spec: `fc:miniapp` meta tag is the preferred format (and `fc:frame` is
