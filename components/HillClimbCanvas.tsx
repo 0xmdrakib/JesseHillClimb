@@ -218,6 +218,28 @@ function buildTrack(seed = 1337): Track {
     }
   }
 
+
+  // Start pad: keep terrain flat around the spawn so the car doesn't begin tilted.
+  // (The procedural generator can produce a slight slope near x=0, which makes first-touch feel bad.)
+  const PAD_X0 = -4;
+  const PAD_X1 = 8;
+  const PAD_BLEND = 3; // meters (smooth blend into the generated hills)
+  const i0 = Math.max(0, Math.min(ys.length - 1, Math.round((0 - TRACK_X0) / TRACK_DX)));
+  const yPad = ys[i0];
+
+  for (let i = 0; i < xs.length; i++) {
+    const xx = xs[i];
+    if (xx >= PAD_X0 && xx <= PAD_X1) {
+      ys[i] = yPad;
+    } else if (xx > PAD_X0 - PAD_BLEND && xx < PAD_X0) {
+      const t = smooth01((xx - (PAD_X0 - PAD_BLEND)) / PAD_BLEND);
+      ys[i] = ys[i] * (1 - t) + yPad * t;
+    } else if (xx > PAD_X1 && xx < PAD_X1 + PAD_BLEND) {
+      const t = smooth01((xx - PAD_X1) / PAD_BLEND);
+      ys[i] = yPad * (1 - t) + ys[i] * t;
+    }
+  }
+
   return { xs, ys };
 }
 
@@ -407,8 +429,9 @@ export const HillClimbCanvas = forwardRef<
 
     // Jeep chassis (stability-first: lower COM so GAS doesn't insta-flip)
     const spawnX = 0;
+    const groundY0 = sampleTrackY(track, spawnX);
     // Spawn a bit closer to ground to avoid the "drop + snap" that can kick the car.
-    const spawnY = sampleTrackY(track, spawnX) + 1.55;
+    const spawnY = groundY0 + 1.55;
 
     const chassis = world.createDynamicBody({
       position: Vec2(spawnX, spawnY),
@@ -431,8 +454,10 @@ export const HillClimbCanvas = forwardRef<
     // Wheels
     const wheelRadius = 0.34;
     // Wheel centers start nearer the terrain so suspension settles smoothly.
-    const wheel1 = world.createDynamicBody({ position: Vec2(spawnX - 0.80, sampleTrackY(track, spawnX - 0.80) + 0.60), angularDamping: 0.85, bullet: true });
-    const wheel2 = world.createDynamicBody({ position: Vec2(spawnX + 0.80, sampleTrackY(track, spawnX + 0.80) + 0.60), angularDamping: 0.85, bullet: true });
+    // Start both wheels at the same Y so the car begins level (track can be slightly sloped).
+    const wheelY0 = groundY0 + 0.60;
+    const wheel1 = world.createDynamicBody({ position: Vec2(spawnX - 0.80, wheelY0), angularDamping: 0.85, bullet: true });
+    const wheel2 = world.createDynamicBody({ position: Vec2(spawnX + 0.80, wheelY0), angularDamping: 0.85, bullet: true });
     wheel1.setUserData({ kind: "wheel1" });
     wheel2.setUserData({ kind: "wheel2" });
 
@@ -456,6 +481,10 @@ export const HillClimbCanvas = forwardRef<
     const spring2 = world.createJoint(planck.WheelJoint(common as any, chassis, wheel2, wheel2.getPosition(), axis)) as planck.WheelJoint;
 
     carRef.current = { chassis, wheel1, wheel2, spring1, spring2 };
+
+    // Ensure a neutral start (no initial tilt/rotation).
+    chassis.setAngle(0);
+    chassis.setAngularVelocity(0);
 
     // Contact listeners: detect when wheels touch the ground (for air-control + tuning feel)
     world.on("begin-contact", (c: planck.Contact) => {
