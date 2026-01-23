@@ -20,6 +20,9 @@ body{
   color:#0b1725;
   overscroll-behavior:none;
 }
+body.miniBody{
+  background: var(--sky);
+}
 a{color:inherit}
 .main{
   min-height:100vh;
@@ -43,7 +46,7 @@ a{color:inherit}
   border-radius:0;
   border:0;
   box-shadow:none;
-  background: rgba(255,255,255,.86);
+  background: var(--sky);
 }
 .header{
   padding:14px 16px;
@@ -93,6 +96,30 @@ a{color:inherit}
   border-top:1px solid rgba(0,0,0,.08);
   touch-action: none;
 }
+
+.playfield{
+  position:relative;
+  width:100%;
+  height:100%;
+  overflow:hidden;
+}
+
+/* Portrait Mini App: render a landscape playfield inside the portrait viewport */
+.stagePortrait{
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  padding: 10px;
+}
+.stagePortrait .playfield{
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  max-height: 100%;
+  border-radius: 18px;
+  background: var(--sky);
+}
+.stagePortrait canvas{ height: 100%; }
 .shellMini .stage{
   /* Mini Apps: fill the usable viewport; dvh behaves better with mobile browser UI */
   height: calc(100dvh - 74px - var(--safe-top));
@@ -109,11 +136,13 @@ canvas{
 }
 .hud{
   position:absolute;
-  top:12px;
-  left:12px;
+  top: calc(12px + var(--safe-top));
+  left: calc(12px + var(--safe-left));
   display:flex;
   flex-direction:column;
+  align-items:flex-start;
   gap:10px;
+  max-width: calc(100% - 24px - var(--safe-left) - var(--safe-right));
 }
 .hudRow{
   display:flex;
@@ -121,6 +150,7 @@ canvas{
   gap:12px;
 }
 .hudCard{
+  width: fit-content;
   pointer-events:none;
   background: rgba(255,255,255,.8);
   border: 1px solid rgba(0,0,0,.08);
@@ -701,8 +731,17 @@ canvas{
     height: clamp(72px, 18vw, 104px);
   }
   .shellMini .gauges{ gap: clamp(10px, 3vw, 16px); }
-  .shellMini .hudCard{ transform: scale(.92); transform-origin: top left; }
+  .shellMini .hudCard{
+    transform: scale(.92);
+    transform-origin: top left;
+    min-width: 160px;
+    padding: 8px 10px;
+  }
+  .shellMini .bigNum{ font-size: 18px; }
+  .shellMini .fuelBar{ width: 160px; }
 }
+
+
 
 /* --- Game over snapshot + onchain actions --- */
 .endShotWrap{
@@ -738,3 +777,51 @@ canvas{
 .endOnchainOk{color:#0a5d2a; opacity:1;}
 .endOnchainBtns{margin-top:10px; display:flex; gap:10px;}
 .endOnchainBtns .actionBtn{flex:1; justify-content:center;}
+
+/* When forcing landscape playfield inside portrait, tighten controls further */
+.stagePortrait .pedal{ width: min(180px, 38vw); height: clamp(70px, 10vh, 92px); }
+.stagePortrait .gauge{ width: clamp(64px, 14vw, 92px); height: clamp(64px, 14vw, 92px); }
+.stagePortrait .gauges{ gap: clamp(8px, 2.5vw, 14px); }
+
+/* Mini portrait: small helper prompt (optional landscape) */
+.landscapePrompt{
+  pointer-events:auto;
+  position:absolute;
+  left:50%;
+  top: calc(10px + var(--safe-top));
+  transform: translateX(-50%);
+  z-index: 50;
+}
+.landscapePromptCard{
+  display:flex;
+  gap:10px;
+  align-items:center;
+  padding:10px 12px;
+  border-radius: 999px;
+  background: rgba(10,20,30,.68);
+  color: white;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,.16);
+  box-shadow: 0 16px 30px rgba(0,0,0,.18);
+}
+.landscapePromptTitle{
+  font-weight: 900;
+  font-size: 12px;
+  letter-spacing: .2px;
+  opacity: .95;
+}
+.landscapeBtn{
+  border:0;
+  background: rgba(255,255,255,.92);
+  color: rgba(10,20,30,.92);
+  font-weight: 900;
+  font-size: 12px;
+  padding: 8px 10px;
+  border-radius: 999px;
+}
+.landscapeErr{
+  font-size: 11px;
+  font-weight: 800;
+  opacity: .9;
+  max-width: 240px;
+}
