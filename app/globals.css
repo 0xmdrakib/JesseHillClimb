@@ -12,7 +12,7 @@
   --shadow:rgba(0,0,0,.35);
 }
 *{box-sizing:border-box}
-html,body{height:100%; overscroll-behavior:none;}
+html,body{height:100%; margin:0; overscroll-behavior:none; overflow-x:hidden;}
 body{
   margin:0;
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
@@ -94,11 +94,8 @@ a{color:inherit}
   touch-action: none;
 }
 .shellMini .stage{
-  /* In Mini Apps we want a true full-bleed play surface. */
-  height: calc(100vh - 74px - var(--safe-top));
-}
-.shellMini .stage{
-  height: calc(100vh - 74px - var(--safe-top));
+  /* Mini Apps: fill the usable viewport; dvh behaves better with mobile browser UI */
+  height: calc(100dvh - 74px - var(--safe-top));
 }
 canvas{
   width:100%;
@@ -673,18 +670,38 @@ canvas{
 }
 
 /* Mini App: avoid a small unused strip on the right side in some webviews */
-.shellMini {
-  width: 100vw;
-  max-width: 100vw;
-  overflow-x: hidden;
+.shellMini{width:100%; max-width:100%; overflow-x:hidden;}
+.mainMini{width:100%;}
+.shellMini .stage{width:100%;}
+
+/* Mini App layout tightening for phones */
+.shellMini .hud{
+  top: calc(12px + var(--safe-top));
+  left: calc(12px + var(--safe-left));
+  right: calc(12px + var(--safe-right));
+}
+.shellMini .controls{
+  bottom: calc(12px + var(--safe-bottom));
+  padding-left: calc(12px + var(--safe-left));
+  padding-right: calc(12px + var(--safe-right));
+}
+.shellMini .gauges{
+  bottom: calc(16px + var(--safe-bottom));
 }
 
-.mainMini {
-  width: 100vw;
-}
-
-.shellMini .stage {
-  width: 100vw;
+/* Phone-sized controls: shrink without breaking desktop */
+@media (max-width: 520px){
+  .shellMini .pedal{
+    width: min(200px, 42vw);
+    height: clamp(76px, 12vh, 104px);
+    border-radius: 16px;
+  }
+  .shellMini .gauge{
+    width: clamp(72px, 18vw, 104px);
+    height: clamp(72px, 18vw, 104px);
+  }
+  .shellMini .gauges{ gap: clamp(10px, 3vw, 16px); }
+  .shellMini .hudCard{ transform: scale(.92); transform-origin: top left; }
 }
 
 /* --- Game over snapshot + onchain actions --- */
