@@ -77,6 +77,10 @@ export default function Page() {
   const [boostHeld, setBoostHeld] = useState(false);
 
   const [mini, setMini] = useState<{ isMini: boolean; fid: number | null }>({ isMini: false, fid: null });
+  const [isPortrait, setIsPortrait] = useState(false);
+  const [landscapeTried, setLandscapeTried] = useState(false);
+  const [landscapeErr, setLandscapeErr] = useState<string>("");
+
 
   const [walletAddr, setWalletAddr] = useState<string | null>(null);
   const [bestOnchainM, setBestOnchainM] = useState<number>(0);
@@ -123,6 +127,48 @@ export default function Page() {
       setMini({ isMini: Boolean(sdk), fid });
     })();
   }, []);
+
+  // Orientation detection (used for Mini App portrait layout)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(orientation: portrait)");
+    const update = () => setIsPortrait(Boolean(mq.matches));
+    update();
+    // Some WebViews only fire resize; we subscribe to both.
+    mq.addEventListener?.("change", update);
+    window.addEventListener("resize", update);
+    return () => {
+      mq.removeEventListener?.("change", update);
+      window.removeEventListener("resize", update);
+    };
+  }, []);
+
+  // Mini App background: match the stage sky so we never show a 1px "gap" stripe on the right.
+  useEffect(() => {
+    if (!mini.isMini) return;
+    document.body.classList.add("miniBody");
+    return () => document.body.classList.remove("miniBody");
+  }, [mini.isMini]);
+
+  const miniPortrait = mini.isMini && isPortrait;
+
+  const tryLandscape = async () => {
+    setLandscapeTried(true);
+    setLandscapeErr("");
+    try {
+      const rootEl = document.documentElement as any;
+      if (rootEl?.requestFullscreen && !document.fullscreenElement) {
+        await rootEl.requestFullscreen();
+      }
+      if (typeof screen !== "undefined" && (screen as any).orientation?.lock) {
+        await (screen as any).orientation.lock("landscape");
+        return;
+      }
+      setLandscapeErr("Landscape lock is not supported here. Wide mode is enabled instead.");
+    } catch (e: any) {
+      setLandscapeErr("Could not force landscape in this client. Wide mode is enabled instead.");
+    }
+  };
 
   // Pause automatically when the app is backgrounded.
   useEffect(() => {
@@ -291,6 +337,17 @@ export default function Page() {
   const isEnd = state.status === "CRASH" || state.status === "OUT_OF_FUEL";
 
   const throttleSet = (t: number) => gameRef.current?.setThrottle(t);
+
+  const onGasDown = () => {
+    // Try once to enter landscape on first interaction (required by most browsers).
+    if (miniPortrait && !landscapeTried) {
+      // Fire-and-forget; if it fails we still play in wide mode.
+      void tryLandscape();
+    }
+    throttleSet(1);
+  };
+
+  const onBrakeDown = () => throttleSet(-1);
   const boostSet = (on: boolean) => {
     setBoostHeld(on);
     gameRef.current?.setBoost?.(on);
@@ -300,7 +357,7 @@ export default function Page() {
 
   return (
     <main className={"main " + (mini.isMini ? "mainMini" : "")}> 
-      <div className={"shell " + (mini.isMini ? "shellMini" : "")}> 
+      <div className={"shell " + (mini.isMini ? "shellMini" : "") + (miniPortrait ? " miniPortrait" : "")}> 
         <div className={"header " + (mini.isMini ? "headerMini" : "")}> 
           <div>
             <div className="titleRow">
@@ -322,7 +379,8 @@ export default function Page() {
           </div>
         </div>
 
-        <div className="stage">
+        <div className={"stage" + (miniPortrait ? " stagePortrait" : "")}>
+          <div className="playfield">
           <HillClimbCanvas
 	          // NOTE: ref callbacks must return void (React's LegacyRef expects void).
 	          // Using a block body avoids returning the assigned value.
@@ -408,6 +466,21 @@ export default function Page() {
           {/* Minimal start hint */}
           {state.status !== "RUN" && !isEnd ? <div className="centerHint">Tap GAS to start</div> : null}
 
+
+          {/* Mini App portrait: wide-mode + optional landscape button */}
+          {miniPortrait ? (
+            <div className="landscapePrompt">
+              <div className="landscapePromptCard">
+                <div className="landscapePromptTitle">Best in landscape</div>
+                <button type="button" className="landscapeBtn" onClick={() => void tryLandscape()}>
+                  Go landscape
+                </button>
+                {landscapeErr ? <div className="landscapeErr">{landscapeErr}</div> : null}
+              </div>
+            </div>
+          ) : null}
+
+
           {/* End screen */}
           {isEnd ? (
             <div className="endScreen">
@@ -472,8 +545,8 @@ export default function Page() {
 
           {/* Controls */}
           <div className="controls">
-            <Pedal label="BRAKE" side="left" onDown={() => throttleSet(-1)} onUp={() => throttleSet(0)} />
-            <Pedal label="GAS" side="right" onDown={() => throttleSet(1)} onUp={() => throttleSet(0)} />
+            <Pedal label="BRAKE" side="left" onDown={onBrakeDown} onUp={() => throttleSet(0)} />
+            <Pedal label="GAS" side="right" onDown={onGasDown} onUp={() => throttleSet(0)} />
           </div>
 
           {/* Gauges (RPM + BOOST) */}
@@ -487,6 +560,7 @@ export default function Page() {
               onDown={() => boostSet(true)}
               onUp={() => boostSet(false)}
             />
+          </div>
           </div>
         </div>
       </div>
