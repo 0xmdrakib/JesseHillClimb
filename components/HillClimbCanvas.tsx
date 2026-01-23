@@ -33,7 +33,7 @@ const Vec2 = planck.Vec2;
 
 // World scale: Box2D-style sims like 0.1-10m sized objects.
 // We render at ~45 CSS px per meter.
-const SCALE = 45;
+let SCALE = 45;
 // 60Hz is the canonical Box2D/Planck recommendation for high-quality sims.
 // (We still keep iteration counts modest for browser performance.)
 const HZ = 60;
@@ -619,19 +619,55 @@ export const HillClimbCanvas = forwardRef<
       }
     };
 
-    const resize = () => {
+    
+const resize = () => {
       const c = canvasRef.current;
       if (!c) return;
+
       const rect = c.getBoundingClientRect();
-      c.width = Math.round(rect.width * devicePixelRatio);
-      c.height = Math.round(rect.height * devicePixelRatio);
+      const dpr = window.devicePixelRatio || 1;
+
+      const pxW = Math.max(1, Math.floor(rect.width * dpr));
+      const pxH = Math.max(1, Math.floor(rect.height * dpr));
+
+      // Avoid clearing the canvas if nothing changed.
+      if (c.width !== pxW) c.width = pxW;
+      if (c.height !== pxH) c.height = pxH;
+
+      // Responsive "contain" scaling: keep roughly a consistent world width visible.
+      // - Desktop: close to the original 45 px/m feel.
+      // - Phones: lower px/m so more of the world fits (less "zoomed-in").
+      const cssW = rect.width;
+      const isPhone = cssW < 520;
+      const targetWorldWidthM = isPhone ? 18 : 20; // tune this if you want more/less zoom
+
+      const raw = cssW / targetWorldWidthM;
+      const minPxPerM = isPhone ? 18 : 28;
+      const maxPxPerM = isPhone ? 32 : 46;
+
+      SCALE = Math.max(minPxPerM, Math.min(maxPxPerM, raw));
     };
 
+    // ResizeObserver fixes the "looks wrong until I manually resize the window" bug.
+    // The canvas' CSS size can change after first paint (fonts, layout, safe-area, etc.).
+    const ro = new ResizeObserver(() => {
+      requestAnimationFrame(resize);
+    });
+
+    if (canvasRef.current) ro.observe(canvasRef.current);
+
     window.addEventListener("resize", resize);
-    resize();
+
+    // Extra initial calls: first paint + one more after layout settles.
+    requestAnimationFrame(() => {
+      resize();
+      requestAnimationFrame(resize);
+    });
+
     raf = requestAnimationFrame(loop);
 
     return () => {
+      ro.disconnect();
       window.removeEventListener("resize", resize);
       cancelAnimationFrame(raf);
     };
