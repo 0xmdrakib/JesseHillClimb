@@ -164,10 +164,15 @@ export default function Page() {
       document.documentElement.style.setProperty("--vvw", `${w}px`);
       document.documentElement.style.setProperty("--vvh", `${h}px`);
 
-      // Only scale down when portrait (h > w). In landscape we keep scale 1.
+      // In portrait Mini App we render a rotated (virtual landscape) page.
+      // We keep scale close to 1 (so it fills the viewport), but slightly reduced
+      // to avoid edge clipping in WebViews and to keep controls comfortably sized.
       const portrait = h > w;
-      const scale = portrait ? Math.max(0.62, Math.min(1, (w / h) * 0.98)) : 1;
-      document.documentElement.style.setProperty("--mini-scale", String(scale));
+      const minSide = Math.min(w, h);
+      const scale = portrait
+        ? (minSide < 360 ? 0.86 : minSide < 420 ? 0.90 : 0.94)
+        : 1;
+      document.documentElement.style.setProperty("--mini-scale", `${scale}`);
     };
 
     update();
