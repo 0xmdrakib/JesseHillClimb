@@ -78,8 +78,6 @@ export default function Page() {
 
   const [mini, setMini] = useState<{ isMini: boolean; fid: number | null }>({ isMini: false, fid: null });
   const [isPortrait, setIsPortrait] = useState(false);
-  const [landscapeTried, setLandscapeTried] = useState(false);
-  const [landscapeErr, setLandscapeErr] = useState<string>("");
 
 
   const [walletAddr, setWalletAddr] = useState<string | null>(null);
@@ -150,25 +148,39 @@ export default function Page() {
     return () => document.body.classList.remove("miniBody");
   }, [mini.isMini]);
 
-  const miniPortrait = mini.isMini && isPortrait;
+  // Mini App "virtual landscape" sizing:
+  // In portrait, we rotate the page content 90° and scale it to fit, like a "video frame".
+  // VisualViewport is more stable than innerWidth/innerHeight in mobile webviews.
+  useEffect(() => {
+    if (!mini.isMini) return;
+    if (typeof window === "undefined") return;
 
-  const tryLandscape = async () => {
-    setLandscapeTried(true);
-    setLandscapeErr("");
-    try {
-      const rootEl = document.documentElement as any;
-      if (rootEl?.requestFullscreen && !document.fullscreenElement) {
-        await rootEl.requestFullscreen();
-      }
-      if (typeof screen !== "undefined" && (screen as any).orientation?.lock) {
-        await (screen as any).orientation.lock("landscape");
-        return;
-      }
-      setLandscapeErr("Landscape lock is not supported here. Wide mode is enabled instead.");
-    } catch (e: any) {
-      setLandscapeErr("Could not force landscape in this client. Wide mode is enabled instead.");
-    }
-  };
+    const vv = (window as any).visualViewport as VisualViewport | undefined;
+
+    const update = () => {
+      const w = vv?.width ?? window.innerWidth;
+      const h = vv?.height ?? window.innerHeight;
+
+      document.documentElement.style.setProperty("--vvw", `${w}px`);
+      document.documentElement.style.setProperty("--vvh", `${h}px`);
+
+      // Only scale down when portrait (h > w). In landscape we keep scale 1.
+      const portrait = h > w;
+      const scale = portrait ? Math.max(0.62, Math.min(1, (w / h) * 0.98)) : 1;
+      document.documentElement.style.setProperty("--mini-scale", String(scale));
+    };
+
+    update();
+    vv?.addEventListener?.("resize", update);
+    window.addEventListener("resize", update);
+    return () => {
+      vv?.removeEventListener?.("resize", update);
+      window.removeEventListener("resize", update);
+    };
+  }, [mini.isMini]);
+
+
+  const miniVirtualLandscape = mini.isMini && isPortrait;
 
   // Pause automatically when the app is backgrounded.
   useEffect(() => {
@@ -339,11 +351,7 @@ export default function Page() {
   const throttleSet = (t: number) => gameRef.current?.setThrottle(t);
 
   const onGasDown = () => {
-    // Try once to enter landscape on first interaction (required by most browsers).
-    if (miniPortrait && !landscapeTried) {
-      // Fire-and-forget; if it fails we still play in wide mode.
-      void tryLandscape();
-    }
+    throttleSet(1);
     throttleSet(1);
   };
 
@@ -357,7 +365,7 @@ export default function Page() {
 
   return (
     <main className={"main " + (mini.isMini ? "mainMini" : "")}> 
-      <div className={"shell " + (mini.isMini ? "shellMini" : "") + (miniPortrait ? " miniPortrait" : "")}> 
+      <div className={"shell " + (mini.isMini ? "shellMini" : "") + (miniVirtualLandscape ? " miniVirtualLandscape" : "")}> 
         <div className={"header " + (mini.isMini ? "headerMini" : "")}> 
           <div>
             <div className="titleRow">
@@ -379,7 +387,7 @@ export default function Page() {
           </div>
         </div>
 
-        <div className={"stage" + (miniPortrait ? " stagePortrait" : "")}>
+        <div className="stage">
           <div className="playfield">
           <HillClimbCanvas
 	          // NOTE: ref callbacks must return void (React's LegacyRef expects void).
@@ -468,17 +476,6 @@ export default function Page() {
 
 
           {/* Mini App portrait: wide-mode + optional landscape button */}
-          {miniPortrait ? (
-            <div className="landscapePrompt">
-              <div className="landscapePromptCard">
-                <div className="landscapePromptTitle">Best in landscape</div>
-                <button type="button" className="landscapeBtn" onClick={() => void tryLandscape()}>
-                  Go landscape
-                </button>
-                {landscapeErr ? <div className="landscapeErr">{landscapeErr}</div> : null}
-              </div>
-            </div>
-          ) : null}
 
 
           {/* End screen */}
