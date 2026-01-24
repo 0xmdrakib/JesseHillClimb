@@ -87,6 +87,16 @@ a{color:inherit}
   transform-origin: top left;
 }
 
+/* Scale header + driver selector as well (keeps desktop-like proportions in Mini App) */
+.shellMini.miniVirtualLandscape .header{
+  transform: scale(var(--mini-ui-scale));
+  transform-origin: top left;
+}
+.shellMini.miniVirtualLandscape .driverBtn{
+  transform: scale(var(--mini-ui-scale));
+  transform-origin: top right;
+}
+
 /* Keep HUD compact on small screens */
 .shellMini .hudCard{
   min-width: clamp(160px, 20vmin, 220px);
