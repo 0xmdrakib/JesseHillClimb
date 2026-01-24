@@ -1,4 +1,8 @@
 :root{
+  --vvw: 100vw;
+  --vvh: 100vh;
+  --mini-scale: 1;
+
   --safe-top:0px;
   --safe-bottom:0px;
   --safe-left:0px;
@@ -48,6 +52,37 @@ a{color:inherit}
   box-shadow:none;
   background: var(--sky);
 }
+
+/* Mini App: virtual landscape
+   In portrait webviews we cannot reliably lock device orientation without fullscreen + user gesture.
+   Instead, we render the entire UI in a rotated, scaled "landscape page" that always fits. */
+.shellMini.miniVirtualLandscape{
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  width: var(--vvh);
+  height: var(--vvw);
+  transform: translate(-50%, -50%) rotate(90deg) scale(var(--mini-scale));
+  transform-origin: center;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* When rotated, avoid vh/dvh math inside; use flex instead. */
+.shellMini.miniVirtualLandscape .stage{
+  flex: 1;
+  height: auto;
+}
+
+/* Keep HUD compact on small screens */
+.shellMini .hudCard{
+  min-width: clamp(160px, 20vmin, 220px);
+  padding: 8px 10px;
+}
+
+/* Prevent any accidental horizontal scrollbars */
+.mainMini{overflow:hidden;}
 .header{
   padding:14px 16px;
   display:flex;
