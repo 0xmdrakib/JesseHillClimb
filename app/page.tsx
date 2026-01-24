@@ -129,15 +129,43 @@ export default function Page() {
   // Orientation detection (used for Mini App portrait layout)
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const mq = window.matchMedia("(orientation: portrait)");
-    const update = () => setIsPortrait(Boolean(mq.matches));
-    update();
-    // Some WebViews only fire resize; we subscribe to both.
-    mq.addEventListener?.("change", update);
-    window.addEventListener("resize", update);
+
+    const vv = (window as any).visualViewport as VisualViewport | undefined;
+
+    // "orientation: portrait" can flap inside embedded webviews (address bar/keyboard).
+    // Use a ratio-based check with hysteresis to avoid UI blinking.
+    let last: boolean | null = null;
+
+    const compute = () => {
+      const w = vv?.width ?? window.innerWidth;
+      const h = vv?.height ?? window.innerHeight;
+
+      // Hysteresis: only flip when we're clearly portrait/landscape.
+      const next =
+        h > w * 1.08 ? true :
+        w > h * 1.08 ? false :
+        (last ?? (h >= w));
+
+      last = next;
+      setIsPortrait(next);
+    };
+
+    let raf = 0;
+    const on = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(compute);
+    };
+
+    on();
+    vv?.addEventListener?.("resize", on);
+    vv?.addEventListener?.("scroll", on);
+    window.addEventListener("resize", on);
+
     return () => {
-      mq.removeEventListener?.("change", update);
-      window.removeEventListener("resize", update);
+      cancelAnimationFrame(raf);
+      vv?.removeEventListener?.("resize", on);
+      vv?.removeEventListener?.("scroll", on);
+      window.removeEventListener("resize", on);
     };
   }, []);
 
@@ -148,68 +176,96 @@ export default function Page() {
     return () => document.body.classList.remove("miniBody");
   }, [mini.isMini]);
 
-  // Mini App "virtual landscape" sizing:
-// In portrait, we rotate the page content 90° to behave like a fixed landscape canvas.
-// We DO NOT scale the whole page (that creates giant empty margins); instead we:
-//   1) compute a stable viewport size (VisualViewport) for layout + canvas sizing
-//   2) expose a "virtual landscape" width/height (lvw/lvh) so CSS can size correctly
-//   3) trigger a resize after updates so the canvas/UI re-layout immediately
-useEffect(() => {
-  if (!mini.isMini) return;
-  if (typeof window === "undefined") return;
+  // Mini App sizing helpers
+  useEffect(() => {
+    if (!mini.isMini) return;
 
-  const vv = (window as any).visualViewport as VisualViewport | undefined;
+    const vv = (window as any).visualViewport as VisualViewport | undefined;
+    const root = document.documentElement;
 
-  let lastW = 0;
-  let lastH = 0;
-  let scheduled = false;
+    let raf = 0;
+    let lastW = -1;
+    let lastH = -1;
 
-  const update = () => {
-    const w = vv?.width ?? window.innerWidth;
-    const h = vv?.height ?? window.innerHeight;
+    const update = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const w = vv?.width ?? window.innerWidth;
+        const h = vv?.height ?? window.innerHeight;
 
-    // Raw viewport (portrait webview area)
-    document.documentElement.style.setProperty("--vvw", `${w}px`);
-    document.documentElement.style.setProperty("--vvh", `${h}px`);
+        // Ignore tiny oscillations (common in embedded webviews) to prevent flicker.
+        if (Math.abs(w - lastW) < 1 && Math.abs(h - lastH) < 1) return;
+        lastW = w;
+        lastH = h;
 
-    // Virtual landscape dims (swap when portrait)
-    const portrait = h > w;
-    const lvw = portrait ? h : w;
-    const lvh = portrait ? w : h;
-    document.documentElement.style.setProperty("--lvw", `${lvw}px`);
-    document.documentElement.style.setProperty("--lvh", `${lvh}px`);
+        root.style.setProperty("--vvw", `${Math.round(w)}px`);
+        root.style.setProperty("--vvh", `${Math.round(h)}px`);
 
-    // Keep container scale 1 (no letterboxing)
-    document.documentElement.style.setProperty("--mini-scale", "1");
-
-    // Make HUD/controls slightly smaller on phones, but keep them readable.
-    const shortSide = Math.min(w, h); // in CSS px
-    const uiScale = Math.max(0.82, Math.min(0.95, shortSide / 460));
-    document.documentElement.style.setProperty("--mini-ui-scale", String(uiScale));
-
-    // Force a relayout for canvas + UI after the viewport actually changes.
-    // (Avoid infinite loops: we only dispatch when dimensions changed.)
-    const changed = w !== lastW || h !== lastH;
-    lastW = w;
-    lastH = h;
-    if (changed && !scheduled) {
-      scheduled = true;
-      requestAnimationFrame(() => {
-        scheduled = false;
-        window.dispatchEvent(new Event("resize"));
+        // UI scale: keep HUD/controls proportional on narrow screens.
+        const short = Math.min(w, h);
+        const uiScale = Math.max(0.72, Math.min(1, short / 520));
+        root.style.setProperty("--mini-ui-scale", uiScale.toFixed(3));
       });
-    }
-  };
+    };
 
-  update();
-  vv?.addEventListener?.("resize", update);
-  window.addEventListener("resize", update);
-  return () => {
-    vv?.removeEventListener?.("resize", update);
-    window.removeEventListener("resize", update);
-  };
-}, [mini.isMini]);
-  const miniVirtualLandscape = mini.isMini && isPortrait;
+    update();
+    vv?.addEventListener?.("resize", update);
+    vv?.addEventListener?.("scroll", update);
+    window.addEventListener("resize", update);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      vv?.removeEventListener?.("resize", update);
+      vv?.removeEventListener?.("scroll", update);
+      window.removeEventListener("resize", update);
+    };
+  }, [mini.isMini]);
+
+  // Best-effort: on first user gesture in Mini App, try to go fullscreen + lock to landscape.
+  // (Many mobile browsers require fullscreen + user gesture for orientation lock.)
+  useEffect(() => {
+    if (!mini.isMini) return;
+
+    let done = false;
+
+    const tryLock = async () => {
+      if (done) return;
+      done = true;
+
+      try {
+        const el: any = document.documentElement;
+        if (el?.requestFullscreen) {
+          await el.requestFullscreen();
+        }
+      } catch {
+        // ignore
+      }
+
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const scr: any = screen as any;
+        await scr?.orientation?.lock?.("landscape");
+      } catch {
+        // ignore (not supported / blocked)
+      }
+    };
+
+    const onFirst = () => {
+      tryLock();
+      window.removeEventListener("pointerdown", onFirst);
+      window.removeEventListener("touchstart", onFirst);
+    };
+
+    window.addEventListener("pointerdown", onFirst, { passive: true });
+    window.addEventListener("touchstart", onFirst, { passive: true });
+
+    return () => {
+      window.removeEventListener("pointerdown", onFirst);
+      window.removeEventListener("touchstart", onFirst);
+    };
+  }, [mini.isMini]);
+
+  const miniPortrait = mini.isMini && isPortrait;
 
   // Pause automatically when the app is backgrounded.
   useEffect(() => {
@@ -379,7 +435,10 @@ useEffect(() => {
 
   const throttleSet = (t: number) => gameRef.current?.setThrottle(t);
 
-  const onGasDown = () => throttleSet(1);
+  const onGasDown = () => {
+    throttleSet(1);
+    throttleSet(1);
+  };
 
   const onBrakeDown = () => throttleSet(-1);
   const boostSet = (on: boolean) => {
@@ -389,10 +448,9 @@ useEffect(() => {
 
   const beatOnchainBest = isEnd && Math.floor(state.distanceM) > Math.floor(bestOnchainM);
 
-
   return (
     <main className={"main " + (mini.isMini ? "mainMini" : "")}> 
-      <div className={"shell " + (mini.isMini ? "shellMini" : "") + (miniVirtualLandscape ? " miniVirtualLandscape" : "")}> 
+      <div className={"shell " + (mini.isMini ? "shellMini" : "") + (miniPortrait ? " miniPortrait" : "")}> 
         <div className={"header " + (mini.isMini ? "headerMini" : "")}> 
           <div>
             <div className="titleRow">
@@ -414,7 +472,7 @@ useEffect(() => {
           </div>
         </div>
 
-        <div className={"stage"}>
+        <div className={"stage " + (miniPortrait ? "stagePortrait" : "")}>
           <div className="playfield">
           <HillClimbCanvas
 	          // NOTE: ref callbacks must return void (React's LegacyRef expects void).
