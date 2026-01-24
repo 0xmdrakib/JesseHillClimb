@@ -1,7 +1,10 @@
 :root{
   --vvw: 100vw;
   --vvh: 100vh;
+  --lvw: 100vw;
+  --lvh: 100vh;
   --mini-scale: 1;
+  --mini-ui-scale: 1;
 
   --safe-top:0px;
   --safe-bottom:0px;
@@ -55,34 +58,33 @@ a{color:inherit}
 
 /* Mini App: virtual landscape
    In portrait webviews we cannot reliably lock device orientation without fullscreen + user gesture.
-   Instead, we render the entire UI in a rotated, scaled "landscape page" that always fits. */
+   Instead, we rotate the *page* into a fixed landscape layout that fills the Mini App viewport.
+   IMPORTANT: do NOT scale the container; scale only UI pieces (HUD/controls) and the render scale. */
 .shellMini.miniVirtualLandscape{
   position: fixed;
-  top: 0;
   left: 0;
-  width: var(--vvh);
-  height: var(--vvw);
-  transform-origin: top left;
-  transform: rotate(90deg) translateY(-100%);
+  top: var(--vvh);         /* matches the CSS-tricks rotate technique */
+  width: var(--lvw);       /* portrait height -> landscape width */
+  height: var(--lvh);      /* portrait width  -> landscape height */
+  transform: rotate(-90deg);
+  transform-origin: left top;
   min-height: 0;
-  overflow: hidden;
+  display: flex;
+  flex-direction: column;
   background: var(--sky);
 }
 
-/* Scale the content without creating letterboxing.
-   We scale *inside* the rotated container and expand the inner box by 1/scale. */
-.shellMini.miniVirtualLandscape .miniScaleRoot{
-  width: calc(100% / var(--mini-scale));
-  height: calc(100% / var(--mini-scale));
-  transform: scale(var(--mini-scale));
-  transform-origin: top left;
-  display: flex;
-  flex-direction: column;
-}
-
-.shellMini.miniVirtualLandscape .miniScaleRoot .stage{
+/* When rotated, avoid vh/dvh math inside; use flex instead. */
+.shellMini.miniVirtualLandscape .stage{
   flex: 1;
   height: auto;
+}
+
+/* Scale only UI chrome (HUD + controls) on small phones */
+.shellMini.miniVirtualLandscape .hud,
+.shellMini.miniVirtualLandscape .controls{
+  transform: scale(var(--mini-ui-scale));
+  transform-origin: top left;
 }
 
 /* Keep HUD compact on small screens */
