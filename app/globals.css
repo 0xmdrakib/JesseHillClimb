@@ -58,19 +58,29 @@ a{color:inherit}
    Instead, we render the entire UI in a rotated, scaled "landscape page" that always fits. */
 .shellMini.miniVirtualLandscape{
   position: fixed;
-  left: 50%;
-  top: 50%;
+  top: 0;
+  left: 0;
   width: var(--vvh);
   height: var(--vvw);
-  transform: translate(-50%, -50%) rotate(90deg) scale(var(--mini-scale));
-  transform-origin: center;
+  transform-origin: top left;
+  transform: rotate(90deg) translateY(-100%);
   min-height: 0;
+  overflow: hidden;
+  background: var(--sky);
+}
+
+/* Scale the content without creating letterboxing.
+   We scale *inside* the rotated container and expand the inner box by 1/scale. */
+.shellMini.miniVirtualLandscape .miniScaleRoot{
+  width: calc(100% / var(--mini-scale));
+  height: calc(100% / var(--mini-scale));
+  transform: scale(var(--mini-scale));
+  transform-origin: top left;
   display: flex;
   flex-direction: column;
 }
 
-/* When rotated, avoid vh/dvh math inside; use flex instead. */
-.shellMini.miniVirtualLandscape .stage{
+.shellMini.miniVirtualLandscape .miniScaleRoot .stage{
   flex: 1;
   height: auto;
 }
