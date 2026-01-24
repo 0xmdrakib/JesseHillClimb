@@ -149,27 +149,66 @@ export default function Page() {
   }, [mini.isMini]);
 
   // Mini App "virtual landscape" sizing:
-  // In portrait, we rotate the page content 90° and scale it to fit, like a "video frame".
-  // VisualViewport is more stable than innerWidth/innerHeight in mobile webviews.
-  useEffect(() => {
-    if (!mini.isMini) return;
-    if (typeof window === "undefined") return;
+// In portrait, we rotate the page content 90° to behave like a fixed landscape canvas.
+// We DO NOT scale the whole page (that creates giant empty margins); instead we:
+//   1) compute a stable viewport size (VisualViewport) for layout + canvas sizing
+//   2) expose a "virtual landscape" width/height (lvw/lvh) so CSS can size correctly
+//   3) trigger a resize after updates so the canvas/UI re-layout immediately
+useEffect(() => {
+  if (!mini.isMini) return;
+  if (typeof window === "undefined") return;
 
-    const vv = (window as any).visualViewport as VisualViewport | undefined;
+  const vv = (window as any).visualViewport as VisualViewport | undefined;
 
-    const update = () => {
-      const w = vv?.width ?? window.innerWidth;
-      const h = vv?.height ?? window.innerHeight;
+  let lastW = 0;
+  let lastH = 0;
+  let scheduled = false;
 
-      document.documentElement.style.setProperty("--vvw", `${w}px`);
-      document.documentElement.style.setProperty("--vvh", `${h}px`);
-      // In portrait Mini App we render a rotated (virtual landscape) page.
-      // Scale is applied *inside* the rotated container (so we avoid letterboxing).
-      // We key it off the portrait width (which becomes the landscape height after rotation).
-      const portrait = h > w;
-      const scale = portrait ? Math.max(0.78, Math.min(0.94, w / 480)) : 1;
-      document.documentElement.style.setProperty("--mini-scale", `${scale}`);
-    };
+  const update = () => {
+    const w = vv?.width ?? window.innerWidth;
+    const h = vv?.height ?? window.innerHeight;
+
+    // Raw viewport (portrait webview area)
+    document.documentElement.style.setProperty("--vvw", `${w}px`);
+    document.documentElement.style.setProperty("--vvh", `${h}px`);
+
+    // Virtual landscape dims (swap when portrait)
+    const portrait = h > w;
+    const lvw = portrait ? h : w;
+    const lvh = portrait ? w : h;
+    document.documentElement.style.setProperty("--lvw", `${lvw}px`);
+    document.documentElement.style.setProperty("--lvh", `${lvh}px`);
+
+    // Keep container scale 1 (no letterboxing)
+    document.documentElement.style.setProperty("--mini-scale", "1");
+
+    // Make HUD/controls slightly smaller on phones, but keep them readable.
+    const shortSide = Math.min(w, h); // in CSS px
+    const uiScale = Math.max(0.82, Math.min(0.95, shortSide / 460));
+    document.documentElement.style.setProperty("--mini-ui-scale", String(uiScale));
+
+    // Force a relayout for canvas + UI after the viewport actually changes.
+    // (Avoid infinite loops: we only dispatch when dimensions changed.)
+    const changed = w !== lastW || h !== lastH;
+    lastW = w;
+    lastH = h;
+    if (changed && !scheduled) {
+      scheduled = true;
+      requestAnimationFrame(() => {
+        scheduled = false;
+        window.dispatchEvent(new Event("resize"));
+      });
+    }
+  };
+
+  update();
+  vv?.addEventListener?.("resize", update);
+  window.addEventListener("resize", update);
+  return () => {
+    vv?.removeEventListener?.("resize", update);
+    window.removeEventListener("resize", update);
+  };
+}, [mini.isMini]);
 
     update();
     vv?.addEventListener?.("resize", update);
@@ -367,7 +406,6 @@ export default function Page() {
   return (
     <main className={"main " + (mini.isMini ? "mainMini" : "")}> 
       <div className={"shell " + (mini.isMini ? "shellMini" : "") + (miniVirtualLandscape ? " miniVirtualLandscape" : "")}> 
-        <div className={miniVirtualLandscape ? "miniScaleRoot" : ""}>
         <div className={"header " + (mini.isMini ? "headerMini" : "")}> 
           <div>
             <div className="titleRow">
@@ -561,7 +599,6 @@ export default function Page() {
             />
           </div>
           </div>
-        </div>
         </div>
       </div>
     </main>
