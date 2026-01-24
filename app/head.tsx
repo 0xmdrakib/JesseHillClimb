@@ -1,8 +1,5 @@
 export default function Head() {
-  const appId = process.env.NEXT_PUBLIC_BASE_APP_ID || "696f2cefc0ab25addaaaf751";
-  return (
-    <>
-      <meta name="base:app_id" content={appId} />
-    </>
-  );
+  // Base "Verify & Add URL" looks for this meta tag in <head> on the homepage.
+  // Keep it here (not in generateMetadata) so it is present immediately.
+  return <meta name="base:app_id" content="696f2cefc0ab25addaaaf751" />;
 }
