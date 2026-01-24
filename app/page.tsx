@@ -112,6 +112,8 @@ export default function Page() {
 
   const gameRef = useRef<HillClimbHandle | null>(null);
 
+  const landscapeTriedRef = useRef(false);
+
   useEffect(() => setHead(loadHead()), []);
 
   useEffect(() => {
@@ -210,17 +212,9 @@ useEffect(() => {
   };
 }, [mini.isMini]);
 
-    update();
-    vv?.addEventListener?.("resize", update);
-    window.addEventListener("resize", update);
-    return () => {
-      vv?.removeEventListener?.("resize", update);
-      window.removeEventListener("resize", update);
-    };
-  }, [mini.isMini]);
 
 
-  const miniVirtualLandscape = mini.isMini && isPortrait;
+  const miniPortraitWide = mini.isMini && isPortrait;
 
   // Pause automatically when the app is backgrounded.
   useEffect(() => {
@@ -391,6 +385,7 @@ useEffect(() => {
   const throttleSet = (t: number) => gameRef.current?.setThrottle(t);
 
   const onGasDown = () => {
+    tryLockLandscape();
     throttleSet(1);
     throttleSet(1);
   };
@@ -403,9 +398,28 @@ useEffect(() => {
 
   const beatOnchainBest = isEnd && Math.floor(state.distanceM) > Math.floor(bestOnchainM);
 
+  const tryLockLandscape = () => {
+    if (!mini.isMini) return;
+    if (!isPortrait) return;
+    if (landscapeTriedRef.current) return;
+    landscapeTriedRef.current = true;
+
+    (async () => {
+      try {
+        // @ts-ignore
+        await document.documentElement?.requestFullscreen?.();
+      } catch {}
+      try {
+        // @ts-ignore
+        await screen?.orientation?.lock?.("landscape");
+      } catch {}
+    })();
+  };
+
+
   return (
     <main className={"main " + (mini.isMini ? "mainMini" : "")}> 
-      <div className={"shell " + (mini.isMini ? "shellMini" : "") + (miniVirtualLandscape ? " miniVirtualLandscape" : "")}> 
+      <div className={"shell " + (mini.isMini ? "shellMini" : "")}> 
         <div className={"header " + (mini.isMini ? "headerMini" : "")}> 
           <div>
             <div className="titleRow">
@@ -427,7 +441,7 @@ useEffect(() => {
           </div>
         </div>
 
-        <div className="stage">
+        <div className={"stage" + (miniPortraitWide ? " stagePortrait" : "")}>
           <div className="playfield">
           <HillClimbCanvas
 	          // NOTE: ref callbacks must return void (React's LegacyRef expects void).
