@@ -33,7 +33,8 @@ const Vec2 = planck.Vec2;
 
 // World scale: Box2D-style sims like 0.1-10m sized objects.
 // We render at ~45 CSS px per meter.
-let SCALE = 45;
+let SCALE = 45; // default; will be recalculated on resize from canvas width
+
 // 60Hz is the canonical Box2D/Planck recommendation for high-quality sims.
 // (We still keep iteration counts modest for browser performance.)
 const HZ = 60;
@@ -655,6 +656,10 @@ const resize = () => {
 
       const rect = c.getBoundingClientRect();
       const dpr = window.devicePixelRatio || 1;
+
+      // Recompute render scale from visible width (keeps phone landscape nicely framed).
+      // Desktop remains unchanged because we cap at the original 45 px/m.
+      SCALE = Math.min(45, Math.max(28, rect.width / 20));
 
       const pxW = Math.max(1, Math.floor(rect.width * dpr));
       const pxH = Math.max(1, Math.floor(rect.height * dpr));
