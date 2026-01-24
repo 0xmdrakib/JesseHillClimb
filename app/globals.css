@@ -82,19 +82,9 @@ a{color:inherit}
 
 /* Scale only UI chrome (HUD + controls) on small phones */
 .shellMini.miniVirtualLandscape .hud,
-.shellMini.miniVirtualLandscape .controls{
+.shellMini.miniPortrait .controls{
   transform: scale(var(--mini-ui-scale));
   transform-origin: top left;
-}
-
-/* Scale header + driver selector as well (keeps desktop-like proportions in Mini App) */
-.shellMini.miniVirtualLandscape .header{
-  transform: scale(var(--mini-ui-scale));
-  transform-origin: top left;
-}
-.shellMini.miniVirtualLandscape .driverBtn{
-  transform: scale(var(--mini-ui-scale));
-  transform-origin: top right;
 }
 
 /* Keep HUD compact on small screens */
@@ -436,6 +426,21 @@ canvas{
   gap:10px;
 }
 
+
+/* Mini App portrait: keep the whole UI readable (no page rotation) by containing the 16:9 playfield */
+.shellMini.miniPortrait{
+  overflow:hidden;
+  touch-action: none;
+}
+
+/* Scale HUD/controls on portrait mini app so they don't become oversized */
+.shellMini.miniPortrait .hud,
+.shellMini.miniPortrait .controls{
+  transform: scale(var(--mini-ui-scale));
+}
+
+.shellMini.miniPortrait .hud{ transform-origin: top left; }
+.shellMini.miniPortrait .controls{ transform-origin: bottom left; }
 /* --- Mini App polish additions --- */
 .main{
   padding:
