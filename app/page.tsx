@@ -163,15 +163,11 @@ export default function Page() {
 
       document.documentElement.style.setProperty("--vvw", `${w}px`);
       document.documentElement.style.setProperty("--vvh", `${h}px`);
-
       // In portrait Mini App we render a rotated (virtual landscape) page.
-      // We keep scale close to 1 (so it fills the viewport), but slightly reduced
-      // to avoid edge clipping in WebViews and to keep controls comfortably sized.
+      // Scale is applied *inside* the rotated container (so we avoid letterboxing).
+      // We key it off the portrait width (which becomes the landscape height after rotation).
       const portrait = h > w;
-      const minSide = Math.min(w, h);
-      const scale = portrait
-        ? (minSide < 360 ? 0.86 : minSide < 420 ? 0.90 : 0.94)
-        : 1;
+      const scale = portrait ? Math.max(0.78, Math.min(0.94, w / 480)) : 1;
       document.documentElement.style.setProperty("--mini-scale", `${scale}`);
     };
 
@@ -371,6 +367,7 @@ export default function Page() {
   return (
     <main className={"main " + (mini.isMini ? "mainMini" : "")}> 
       <div className={"shell " + (mini.isMini ? "shellMini" : "") + (miniVirtualLandscape ? " miniVirtualLandscape" : "")}> 
+        <div className={miniVirtualLandscape ? "miniScaleRoot" : ""}>
         <div className={"header " + (mini.isMini ? "headerMini" : "")}> 
           <div>
             <div className="titleRow">
@@ -564,6 +561,7 @@ export default function Page() {
             />
           </div>
           </div>
+        </div>
         </div>
       </div>
     </main>
