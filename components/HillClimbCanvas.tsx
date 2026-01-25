@@ -560,6 +560,31 @@ export const HillClimbCanvas = forwardRef<
     let lastStatus: HillClimbState["status"] = stateRef.current.status;
     let lastToastT = 0;
 
+    // Snapshot capture is intentionally *not* done during the run.
+    // Creating image data URLs on an interval can cause periodic frame drops that feel like a "blink".
+    // We'll capture once at game-over.
+    const offscreenSnap = document.createElement("canvas");
+    const captureSnapshot = () => {
+      try {
+        const c = canvasRef.current;
+        if (!c) return null;
+
+        // Downscale for reasonable token image size.
+        const targetW = 640;
+        const ratio = c.height / Math.max(1, c.width);
+        const targetH = Math.max(360, Math.round(targetW * ratio));
+
+        offscreenSnap.width = targetW;
+        offscreenSnap.height = targetH;
+        const octx = offscreenSnap.getContext("2d");
+        if (!octx) return null;
+        octx.drawImage(c, 0, 0, offscreenSnap.width, offscreenSnap.height);
+        return offscreenSnap.toDataURL("image/png");
+      } catch {
+        return null;
+      }
+    };
+
     const loop = (tMs: number) => {
       raf = requestAnimationFrame(loop);
 
@@ -597,33 +622,12 @@ export const HillClimbCanvas = forwardRef<
 
       const sNow = stateRef.current;
 
-      // Snapshot capture (every ~350ms while running)
-      if (sNow.status === "RUN" && (snapshotRef.current == null || now - lastSnapTRef.current > 0.25)) {
-        lastSnapTRef.current = now;
-        try {
-          // Downscale for reasonable token image size.
-          const c = canvasRef.current;
-          if (c) {
-            const targetW = 640;
-            const ratio = c.height / Math.max(1, c.width);
-            const targetH = Math.max(360, Math.round(targetW * ratio));
-            const off = document.createElement("canvas");
-            off.width = targetW;
-            off.height = targetH;
-            const octx = off.getContext("2d");
-            if (octx) {
-              octx.drawImage(c, 0, 0, off.width, off.height);
-              snapshotRef.current = off.toDataURL("image/png");
-            }
-          }
-        } catch {
-          // ignore
-        }
-      }
-
       // Fire onGameOver once per end state.
       if ((sNow.status === "CRASH" || sNow.status === "OUT_OF_FUEL") && lastEndStatusRef.current !== sNow.status) {
         lastEndStatusRef.current = sNow.status;
+
+        // Capture the final frame as the run snapshot.
+        snapshotRef.current = captureSnapshot() ?? snapshotRef.current;
         try {
           onGameOver?.({
             snapshotDataUrl: snapshotRef.current,
@@ -650,28 +654,39 @@ export const HillClimbCanvas = forwardRef<
     };
 
     
-const resize = () => {
+    let lastPxW = 0;
+    let lastPxH = 0;
+
+    const resize = () => {
       const c = canvasRef.current;
       if (!c) return;
 
       const rect = c.getBoundingClientRect();
       const dpr = window.devicePixelRatio || 1;
 
+      // Stabilize sub-pixel layout jitter (common in embedded webviews) to avoid resize-thrashing.
+      const cssW = Math.max(1, Math.round(rect.width));
+      const cssH = Math.max(1, Math.round(rect.height));
+
       // Recompute render scale from visible width (keeps phone landscape nicely framed).
       // Desktop remains unchanged because we cap at the original 45 px/m.
-      SCALE = Math.min(45, Math.max(28, rect.width / 20));
+      SCALE = Math.min(45, Math.max(28, cssW / 20));
 
-      const pxW = Math.max(1, Math.floor(rect.width * dpr));
-      const pxH = Math.max(1, Math.floor(rect.height * dpr));
+      const pxW = Math.max(1, Math.round(cssW * dpr));
+      const pxH = Math.max(1, Math.round(cssH * dpr));
 
-      // Avoid clearing the canvas if nothing changed.
-      if (c.width !== pxW) c.width = pxW;
-      if (c.height !== pxH) c.height = pxH;
+      // Avoid clearing the canvas for tiny oscillations.
+      // Only apply if we changed by at least 2 device pixels (prevents "blink").
+      if (Math.abs(pxW - lastPxW) >= 2 || Math.abs(pxH - lastPxH) >= 2) {
+        if (c.width !== pxW) c.width = pxW;
+        if (c.height !== pxH) c.height = pxH;
+        lastPxW = pxW;
+        lastPxH = pxH;
+      }
 
       // Responsive "contain" scaling: keep roughly a consistent world width visible.
       // - Desktop: close to the original 45 px/m feel.
       // - Phones: lower px/m so more of the world fits (less "zoomed-in").
-      const cssW = rect.width;
       const isPhone = cssW < 520;
       const targetWorldWidthM = isPhone ? 18 : 20; // tune this if you want more/less zoom
 
@@ -1577,20 +1592,53 @@ function drawCoin(ctx: CanvasRenderingContext2D, x: number, y: number, r: number
 }
 
 function drawFuel(ctx: CanvasRenderingContext2D, x: number, y: number, s: number) {
+  // Jerrycan style (closer to the classic Hill Climb fuel pickup)
   ctx.save();
   ctx.translate(x, y);
+
+  const w = s * 1.55;
+  const h = s * 1.90;
+  const r = Math.max(2, s * 0.16);
+
+  // Main body
   ctx.fillStyle = "#e11d2e";
-  ctx.strokeStyle = "rgba(0,0,0,0.25)";
-  ctx.lineWidth = 2;
-  roundRect(ctx, -s, -s, s * 2, s * 2, 4);
+  ctx.strokeStyle = "rgba(0,0,0,0.28)";
+  ctx.lineWidth = Math.max(2, s * 0.12);
+
+  roundRect(ctx, -w / 2, -h / 2, w, h, r);
   ctx.fill();
   ctx.stroke();
 
-  ctx.fillStyle = "rgba(255,255,255,0.85)";
-  ctx.fillRect(-s * 0.2, -s * 0.25, s * 0.4, s * 0.5);
+  // Handle cutout
+  ctx.save();
+  ctx.globalCompositeOperation = "destination-out";
+  roundRect(ctx, -w * 0.30, -h * 0.47, w * 0.34, h * 0.22, r * 0.65);
+  ctx.fill();
+  ctx.restore();
 
+  // Spout / cap
   ctx.fillStyle = "#111";
-  ctx.fillRect(s * 0.25, -s * 0.75, s * 0.5, s * 0.25);
+  roundRect(ctx, w * 0.12, -h * 0.62, w * 0.34, h * 0.18, r * 0.55);
+  ctx.fill();
+
+  // White cross
+  ctx.fillStyle = "rgba(255,255,255,0.92)";
+  const cw = w * 0.18;
+  const ch = h * 0.48;
+  roundRect(ctx, -cw / 2, -ch * 0.10, cw, ch * 0.60, r * 0.6);
+  ctx.fill();
+  roundRect(ctx, -ch * 0.30, h * 0.03 - cw / 2, ch * 0.60, cw, r * 0.6);
+  ctx.fill();
+
+  // Subtle highlight
+  const g = ctx.createLinearGradient(-w / 2, -h / 2, w / 2, h / 2);
+  g.addColorStop(0, "rgba(255,255,255,0.22)");
+  g.addColorStop(0.5, "rgba(255,255,255,0)");
+  g.addColorStop(1, "rgba(0,0,0,0.12)");
+  ctx.fillStyle = g;
+  roundRect(ctx, -w / 2, -h / 2, w, h, r);
+  ctx.fill();
+
   ctx.restore();
 }
 
