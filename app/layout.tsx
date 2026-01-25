@@ -16,7 +16,7 @@ export const viewport: Viewport = {
 
 const URL = process.env.NEXT_PUBLIC_URL || "https://jessehillclimb.online";
 const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || "Jesse Hill Climb";
-const BASE_APP_ID = (process.env.NEXT_PUBLIC_BASE_APP_ID || "696f2cefc0ab25addaaaf751").trim();
+const BASE_APP_ID = (process.env.NEXT_PUBLIC_BASE_APP_ID || "6976213f88e3bac59cf3d818").trim();
 
 const imageUrl = process.env.NEXT_PUBLIC_APP_HERO_IMAGE || `${URL}/embed.png`;
 const splashImageUrl = process.env.NEXT_PUBLIC_SPLASH_IMAGE || `${URL}/splash.png`;
