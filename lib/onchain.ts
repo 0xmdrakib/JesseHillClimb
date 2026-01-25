@@ -9,7 +9,13 @@ import {
 } from "viem";
 import { base } from "viem/chains";
 
-import { getEthereumProvider, requestAccounts, getChainId, type Eip1193Provider } from "@/lib/wallet";
+import {
+  getEthereumProvider,
+  requestAccounts,
+  getChainId,
+  type Eip1193Provider,
+  type EthereumProviderOptions,
+} from "@/lib/wallet";
 import { scoreboardAbi, runNftAbi } from "@/lib/onchainAbi";
 
 const BASE_CHAIN_ID = 8453;
@@ -59,8 +65,10 @@ export async function ensureBaseMainnet(provider?: Eip1193Provider) {
   }
 }
 
-export async function connectWallet(): Promise<{ provider: Eip1193Provider; address: Address }> {
-  const provider = await getEthereumProvider();
+export async function connectWallet(
+  opts?: EthereumProviderOptions,
+): Promise<{ provider: Eip1193Provider; address: Address }> {
+  const provider = await getEthereumProvider(opts);
   if (!provider) throw new Error("No wallet provider found");
 
   const accounts = await requestAccounts(provider);
