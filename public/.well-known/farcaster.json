@@ -29,6 +29,6 @@
     "ogTitle": "Jesse Hill Climb",
     "ogDescription": "Hill Climb game with swappable head and nft minting option.",
     "ogImageUrl": "https://jessehillclimb.online/hero.png",
-    "noindex": true
+    "noindex": false
   }
 }
