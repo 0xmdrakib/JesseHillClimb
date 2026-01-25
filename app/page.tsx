@@ -14,6 +14,9 @@ import {
   mintRunNft,
 } from "@/lib/onchain";
 
+// For local browser testing: we'll prefer MetaMask when multiple injected providers exist.
+const DEFAULT_INJECTED_WALLET = "metamask" as const;
+
 function clamp01(n: number) {
   return Math.max(0, Math.min(1, n));
 }
@@ -81,6 +84,7 @@ export default function Page() {
 
 
   const [walletAddr, setWalletAddr] = useState<string | null>(null);
+  const [walletSource, setWalletSource] = useState<string>("");
   const [bestOnchainM, setBestOnchainM] = useState<number>(0);
 
   const [scoreBusy, setScoreBusy] = useState(false);
@@ -335,9 +339,22 @@ export default function Page() {
 
   const ensureConnected = async () => {
     setActionErr("");
-    const { provider, address } = await connectWallet();
+    const preferInjected = mini.isMini ? undefined : { allowMiniApp: false, prefer: DEFAULT_INJECTED_WALLET };
+    const { provider, address } = await connectWallet(preferInjected);
     await ensureBaseMainnet(provider);
     setWalletAddr(address);
+
+    // Human-friendly provider label for debugging.
+    const anyP: any = provider as any;
+    const src = mini.isMini
+      ? "Mini App wallet"
+      : anyP?.isMetaMask
+        ? "MetaMask"
+        : anyP?.isCoinbaseWallet
+          ? "Coinbase Wallet"
+          : "Injected wallet";
+    setWalletSource(src);
+
     await refreshBest(address);
     return address;
   };
@@ -410,6 +427,7 @@ export default function Page() {
           driverId,
           driverName,
           tokenId: tokenId.toString(),
+          gameUrl: url,
         }),
       });
 
@@ -583,6 +601,7 @@ export default function Page() {
                       <div className="endOnchainLine">Network: Base mainnet</div>
                       <div className="endOnchainLine">
                         Wallet: {walletAddr ? walletAddr : "Not connected"}
+                        {walletAddr && walletSource ? ` (${walletSource})` : ""}
                       </div>
                       {!scoreboardAddress || !runNftAddress ? (
                         <div className="endOnchainWarn">Set contract addresses in .env.local to enable.</div>
@@ -594,6 +613,20 @@ export default function Page() {
                   </div>
 
                   <div className="endOnchainBtns">
+                    {!walletAddr ? (
+                      <button
+                        type="button"
+                        className="actionBtn btnDark"
+                        disabled={scoreBusy || mintBusy}
+                        onClick={() => {
+                          void ensureConnected().catch((e: any) => {
+                            setActionErr(e?.message ? String(e.message) : "Wallet connection failed");
+                          });
+                        }}
+                      >
+                        Connect wallet (MetaMask)
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       className="actionBtn btnDark"
