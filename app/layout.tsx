@@ -40,10 +40,10 @@ export const metadata: Metadata = {
   title: APP_NAME,
   description: "Classic hill-climb mini game optimized for Base + Farcaster Mini Apps.",
   other: {
-  "fc:miniapp": JSON.stringify(embed),
-  "fc:frame": JSON.stringify(embed),
-  "base:app_id": "696f2cefc0ab25addaaaf751",
-}
+    "fc:miniapp": JSON.stringify(embed),
+    "fc:frame": JSON.stringify(embed),
+    "base:app_id": "696f2cefc0ab25addaaaf751",
+  }
   openGraph: {
     title: APP_NAME,
     description: "Drive the hills, collect coins, share your best run.",
