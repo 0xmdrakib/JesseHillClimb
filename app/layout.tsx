@@ -43,6 +43,10 @@ export const metadata: Metadata = {
     // Base + Farcaster embed discovery
     "fc:miniapp": JSON.stringify(embed),
     "fc:frame": JSON.stringify(embed),
+    // Redundant with app/head.tsx, but harmless and useful for some parsers.
+    ...(process.env.NEXT_PUBLIC_BASE_APP_ID
+      ? { "base:app_id": process.env.NEXT_PUBLIC_BASE_APP_ID }
+      : {}),
   },
   openGraph: {
     title: APP_NAME,
