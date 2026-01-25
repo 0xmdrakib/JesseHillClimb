@@ -6,7 +6,7 @@
 export default function Head() {
   // NOTE: Base app_id is not secret. Keeping a fallback avoids "Verify & Add" failures
   // when the env var is missing at build time (e.g., env added in Vercel after a deployment).
-  const appId = (process.env.NEXT_PUBLIC_BASE_APP_ID || "696f2cefc0ab25addaaaf751").trim();
+  const appId = (process.env.NEXT_PUBLIC_BASE_APP_ID || "6976213f88e3bac59cf3d818").trim();
   return (
     <>
       <meta name="base:app_id" content={appId} />
