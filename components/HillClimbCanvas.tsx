@@ -1592,48 +1592,86 @@ function drawCoin(ctx: CanvasRenderingContext2D, x: number, y: number, r: number
 }
 
 function drawFuel(ctx: CanvasRenderingContext2D, x: number, y: number, s: number) {
-  // Jerrycan style (closer to the classic Hill Climb fuel pickup)
+  // More "real" jerrycan icon (thick outline + stamped X), closer to common fuel pickup art.
   ctx.save();
   ctx.translate(x, y);
 
-  const w = s * 1.55;
-  const h = s * 1.90;
-  const r = Math.max(2, s * 0.16);
+  const w = s * 1.6;
+  const h = s * 1.95;
+  const r = Math.max(2, s * 0.18);
+  const outline = Math.max(2, s * 0.14);
 
-  // Main body
+  // Shadow
+  ctx.globalAlpha = 0.18;
+  ctx.fillStyle = "#000";
+  ctx.beginPath();
+  ctx.ellipse(0, h * 0.46, w * 0.42, h * 0.11, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
+  // Body
   ctx.fillStyle = "#e11d2e";
-  ctx.strokeStyle = "rgba(0,0,0,0.28)";
-  ctx.lineWidth = Math.max(2, s * 0.12);
-
+  ctx.strokeStyle = "#111";
+  ctx.lineWidth = outline;
+  ctx.lineJoin = "round";
   roundRect(ctx, -w / 2, -h / 2, w, h, r);
   ctx.fill();
   ctx.stroke();
 
-  // Handle cutout
+  // Handle cutout (top-left)
+  const hx = -w * 0.34;
+  const hy = -h * 0.49;
+  const hw = w * 0.46;
+  const hh = h * 0.26;
+
   ctx.save();
   ctx.globalCompositeOperation = "destination-out";
-  roundRect(ctx, -w * 0.30, -h * 0.47, w * 0.34, h * 0.22, r * 0.65);
+  roundRect(ctx, hx, hy, hw, hh, r * 0.65);
   ctx.fill();
   ctx.restore();
 
-  // Spout / cap
+  // Outline the cutout for a crisp "icon" look
+  ctx.strokeStyle = "#111";
+  ctx.lineWidth = Math.max(1, outline * 0.65);
+  roundRect(ctx, hx, hy, hw, hh, r * 0.65);
+  ctx.stroke();
+
+  // Spout/cap (top-right)
   ctx.fillStyle = "#111";
-  roundRect(ctx, w * 0.12, -h * 0.62, w * 0.34, h * 0.18, r * 0.55);
+  roundRect(ctx, w * 0.10, -h * 0.64, w * 0.42, h * 0.20, r * 0.55);
+  ctx.fill();
+  ctx.fillStyle = "#e11d2e";
+  roundRect(ctx, w * 0.38, -h * 0.62, w * 0.12, h * 0.16, r * 0.45);
   ctx.fill();
 
-  // White cross
-  ctx.fillStyle = "rgba(255,255,255,0.92)";
-  const cw = w * 0.18;
-  const ch = h * 0.48;
-  roundRect(ctx, -cw / 2, -ch * 0.10, cw, ch * 0.60, r * 0.6);
-  ctx.fill();
-  roundRect(ctx, -ch * 0.30, h * 0.03 - cw / 2, ch * 0.60, cw, r * 0.6);
+  // Inner stamped panel
+  ctx.strokeStyle = "rgba(0,0,0,0.55)";
+  ctx.lineWidth = Math.max(1, outline * 0.55);
+  const px = -w * 0.27;
+  const py = -h * 0.18;
+  const pw = w * 0.54;
+  const ph = h * 0.62;
+  roundRect(ctx, px, py, pw, ph, r * 0.55);
+  ctx.stroke();
+
+  // Stamped "X"
+  ctx.beginPath();
+  ctx.moveTo(px + pw * 0.18, py + ph * 0.18);
+  ctx.lineTo(px + pw * 0.82, py + ph * 0.82);
+  ctx.moveTo(px + pw * 0.82, py + ph * 0.18);
+  ctx.lineTo(px + pw * 0.18, py + ph * 0.82);
+  ctx.stroke();
+
+  // Small center rivet/mark
+  ctx.fillStyle = "rgba(0,0,0,0.55)";
+  ctx.beginPath();
+  ctx.arc(0, py + ph * 0.50, Math.max(1.2, s * 0.07), 0, Math.PI * 2);
   ctx.fill();
 
-  // Subtle highlight
+  // Highlight
   const g = ctx.createLinearGradient(-w / 2, -h / 2, w / 2, h / 2);
-  g.addColorStop(0, "rgba(255,255,255,0.22)");
-  g.addColorStop(0.5, "rgba(255,255,255,0)");
+  g.addColorStop(0, "rgba(255,255,255,0.28)");
+  g.addColorStop(0.45, "rgba(255,255,255,0.08)");
   g.addColorStop(1, "rgba(0,0,0,0.12)");
   ctx.fillStyle = g;
   roundRect(ctx, -w / 2, -h / 2, w, h, r);
