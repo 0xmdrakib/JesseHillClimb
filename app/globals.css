@@ -19,23 +19,32 @@
   --shadow:rgba(0,0,0,.35);
 }
 *{box-sizing:border-box}
-html,body{height:100%; margin:0; overscroll-behavior:none; overflow-x:hidden;}
+/*
+  Full-screen game: any tiny overflow will create a right-side scrollbar/gutter.
+  Keep the document non-scrollable and fit the app to the visual viewport.
+*/
+html,body{height:100%; margin:0; overscroll-behavior:none; overflow:hidden;}
+html{background: var(--sky);}
 body{
   margin:0;
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
   background: linear-gradient(#f5fbff, #e9f6ff);
   color:#0b1725;
   overscroll-behavior:none;
+  overflow:hidden;
 }
 body.miniBody{
   background: var(--sky);
 }
 a{color:inherit}
 .main{
-  min-height:100vh;
+  /* Use a fixed-height container so padding can't push us beyond the viewport. */
+  height:100dvh;
+  min-height:0;
   display:flex;
   justify-content:center;
   padding:18px;
+  overflow:hidden;
 }
 .mainMini{padding:0; justify-content:flex-start;}
 .shell{
@@ -46,10 +55,14 @@ a{color:inherit}
   border: 1px solid rgba(0,0,0,.06);
   box-shadow: 0 20px 60px rgba(0,0,0,.14);
   overflow:hidden;
+  max-height:100%;
 }
 .shellMini{
   width:100%;
-  min-height:100vh;
+  height:100dvh;
+  min-height:0;
+  display:flex;
+  flex-direction:column;
   border-radius:0;
   border:0;
   box-shadow:none;
@@ -168,8 +181,10 @@ a{color:inherit}
 }
 .stagePortrait canvas{ height: 100%; }
 .shellMini .stage{
-  /* Mini Apps: fill the usable viewport; dvh behaves better with mobile browser UI */
-  height: calc(100dvh - 74px - var(--safe-top));
+  /* Fill remaining space below the header without triggering scrollbars. */
+  flex: 1;
+  height: auto;
+  min-height: 0;
 }
 canvas{
   width:100%;
