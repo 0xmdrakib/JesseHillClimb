@@ -43,8 +43,12 @@ export async function ensureBaseMainnet(provider?: Eip1193Provider) {
       method: "wallet_switchEthereumChain",
       params: [{ chainId: BASE_CHAIN_ID_HEX }],
     });
-  } catch {
-    // If the chain is not available, try adding it.
+  } catch (e: any) {
+    // MetaMask uses error code 4902 to signal "unknown chain".
+    // Only in that case should we call wallet_addEthereumChain.
+    // Otherwise, surface the original error (e.g., user rejected request).
+    if (e?.code !== 4902) throw e;
+
     await p.request({
       method: "wallet_addEthereumChain",
       params: [
@@ -99,18 +103,29 @@ export async function readBestMeters(scoreboardAddress: string, playerAddress: s
 
 export async function submitScoreMeters(scoreboardAddress: string, meters: number): Promise<string> {
   const { provider, address } = await connectWallet();
-  await ensureBaseMainnet(provider);
+  return submitScoreMetersWith(provider, address, scoreboardAddress, meters);
+}
 
+/**
+ * Use an already-connected wallet provider/address.
+ * This avoids double-connecting (which can look like "MetaMask isn't working").
+ */
+export async function submitScoreMetersWith(
+  provider: Eip1193Provider,
+  address: Address,
+  scoreboardAddress: string,
+  meters: number,
+): Promise<string> {
+  if (!scoreboardAddress) throw new Error("Missing scoreboard address");
+  await ensureBaseMainnet(provider);
   const client = getWalletClient(provider, address);
   const m = BigInt(Math.max(0, Math.floor(meters)));
-
   const hash = await client.writeContract({
     address: scoreboardAddress as Address,
     abi: scoreboardAbi,
     functionName: "submitScore",
     args: [m],
   });
-
   return String(hash);
 }
 
@@ -127,19 +142,27 @@ export async function getNextTokenId(runNftAddress: string): Promise<bigint> {
 
 export async function mintRunNft(runNftAddress: string, meters: number, driverId: number, tokenUri: string): Promise<string> {
   const { provider, address } = await connectWallet();
+  return mintRunNftWith(provider, address, runNftAddress, meters, driverId, tokenUri);
+}
+
+export async function mintRunNftWith(
+  provider: Eip1193Provider,
+  address: Address,
+  runNftAddress: string,
+  meters: number,
+  driverId: number,
+  tokenUri: string,
+): Promise<string> {
+  if (!runNftAddress) throw new Error("Missing RunNFT address");
   await ensureBaseMainnet(provider);
-
   const client = getWalletClient(provider, address);
-
   const m = BigInt(Math.max(0, Math.floor(meters)));
   const did = Math.max(0, Math.min(255, Math.floor(driverId)));
-
   const hash = await client.writeContract({
     address: runNftAddress as Address,
     abi: runNftAbi,
     functionName: "mintRun",
     args: [m, did, tokenUri],
   });
-
   return String(hash);
 }
