@@ -1592,89 +1592,71 @@ function drawCoin(ctx: CanvasRenderingContext2D, x: number, y: number, r: number
 }
 
 function drawFuel(ctx: CanvasRenderingContext2D, x: number, y: number, s: number) {
-  // More "real" jerrycan icon (thick outline + stamped X), closer to common fuel pickup art.
+  // Jerrycan style (closer to a real fuel can: bold outline + handle cutout + cap + inner emboss)
   ctx.save();
   ctx.translate(x, y);
 
-  const w = s * 1.6;
-  const h = s * 1.95;
-  const r = Math.max(2, s * 0.18);
+  const w = s * 1.55;
+  const h = s * 1.90;
+  const r = Math.max(2, s * 0.16);
+
   const outline = Math.max(2, s * 0.14);
 
-  // Shadow
-  ctx.globalAlpha = 0.18;
-  ctx.fillStyle = "#000";
-  ctx.beginPath();
-  ctx.ellipse(0, h * 0.46, w * 0.42, h * 0.11, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.globalAlpha = 1;
-
-  // Body
-  ctx.fillStyle = "#e11d2e";
-  ctx.strokeStyle = "#111";
+  // Main body
+  ctx.fillStyle = "#e11d2e"; // red can
+  ctx.strokeStyle = "#0f172a"; // bold outline
   ctx.lineWidth = outline;
-  ctx.lineJoin = "round";
+
   roundRect(ctx, -w / 2, -h / 2, w, h, r);
   ctx.fill();
   ctx.stroke();
 
-  // Handle cutout (top-left)
-  const hx = -w * 0.34;
-  const hy = -h * 0.49;
-  const hw = w * 0.46;
-  const hh = h * 0.26;
-
+  // Handle cutout (punch through)
   ctx.save();
   ctx.globalCompositeOperation = "destination-out";
-  roundRect(ctx, hx, hy, hw, hh, r * 0.65);
+  roundRect(ctx, -w * 0.32, -h * 0.47, w * 0.40, h * 0.22, r * 0.65);
   ctx.fill();
   ctx.restore();
 
-  // Outline the cutout for a crisp "icon" look
-  ctx.strokeStyle = "#111";
-  ctx.lineWidth = Math.max(1, outline * 0.65);
-  roundRect(ctx, hx, hy, hw, hh, r * 0.65);
+  // Handle outline around the cutout (to match the sample logo)
+  ctx.strokeStyle = "#0f172a";
+  ctx.lineWidth = outline * 0.8;
+  roundRect(ctx, -w * 0.32, -h * 0.47, w * 0.40, h * 0.22, r * 0.65);
   ctx.stroke();
 
-  // Spout/cap (top-right)
-  ctx.fillStyle = "#111";
-  roundRect(ctx, w * 0.10, -h * 0.64, w * 0.42, h * 0.20, r * 0.55);
+  // Spout / cap
+  ctx.fillStyle = "#0f172a";
+  roundRect(ctx, w * 0.10, -h * 0.63, w * 0.38, h * 0.18, r * 0.55);
   ctx.fill();
-  ctx.fillStyle = "#e11d2e";
-  roundRect(ctx, w * 0.38, -h * 0.62, w * 0.12, h * 0.16, r * 0.45);
+  // Small cap highlight
+  ctx.fillStyle = "rgba(255,255,255,0.25)";
+  roundRect(ctx, w * 0.16, -h * 0.60, w * 0.18, h * 0.10, r * 0.45);
   ctx.fill();
 
-  // Inner stamped panel
-  ctx.strokeStyle = "rgba(0,0,0,0.55)";
-  ctx.lineWidth = Math.max(1, outline * 0.55);
-  const px = -w * 0.27;
-  const py = -h * 0.18;
-  const pw = w * 0.54;
-  const ph = h * 0.62;
-  roundRect(ctx, px, py, pw, ph, r * 0.55);
+  // Embossed inner panel
+  ctx.strokeStyle = "rgba(255,255,255,0.65)";
+  ctx.lineWidth = outline * 0.55;
+  roundRect(ctx, -w * 0.28, -h * 0.18, w * 0.56, h * 0.52, r * 0.8);
   ctx.stroke();
 
-  // Stamped "X"
+  // Inner "X" emboss (white like sample)
+  ctx.strokeStyle = "rgba(255,255,255,0.92)";
+  ctx.lineWidth = outline * 0.65;
+  ctx.lineCap = "round";
+  const x0 = -w * 0.18;
+  const x1 = w * 0.18;
+  const y0 = -h * 0.02;
+  const y1 = h * 0.26;
   ctx.beginPath();
-  ctx.moveTo(px + pw * 0.18, py + ph * 0.18);
-  ctx.lineTo(px + pw * 0.82, py + ph * 0.82);
-  ctx.moveTo(px + pw * 0.82, py + ph * 0.18);
-  ctx.lineTo(px + pw * 0.18, py + ph * 0.82);
+  ctx.moveTo(x0, y0);
+  ctx.lineTo(x1, y1);
+  ctx.moveTo(x1, y0);
+  ctx.lineTo(x0, y1);
   ctx.stroke();
 
-  // Small center rivet/mark
-  ctx.fillStyle = "rgba(0,0,0,0.55)";
-  ctx.beginPath();
-  ctx.arc(0, py + ph * 0.50, Math.max(1.2, s * 0.07), 0, Math.PI * 2);
-  ctx.fill();
-
-  // Highlight
-  const g = ctx.createLinearGradient(-w / 2, -h / 2, w / 2, h / 2);
-  g.addColorStop(0, "rgba(255,255,255,0.28)");
-  g.addColorStop(0.45, "rgba(255,255,255,0.08)");
-  g.addColorStop(1, "rgba(0,0,0,0.12)");
-  ctx.fillStyle = g;
-  roundRect(ctx, -w / 2, -h / 2, w, h, r);
+  // A small specular highlight for depth
+  ctx.fillStyle = "rgba(255,255,255,0.16)";
+  roundRect(ctx, -w * 0.40, -h * 0.42, w * 0.22, h * 0.70, r * 0.8);
   ctx.fill();
 
   ctx.restore();
