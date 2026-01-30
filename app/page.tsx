@@ -6,14 +6,14 @@ import { loadHead, saveHead, HeadId, HEADS } from "@/lib/heads";
 import { HillClimbCanvas, HillClimbHandle, HillClimbState } from "@/components/HillClimbCanvas";
 import { initMiniApp, composeCast, addMiniApp } from "@/lib/miniapp";
 import {
-  connectWallet,
+  getOrConnectWallet,
+  clearCachedWallet,
   ensureBaseMainnet,
   readBestMeters,
-  submitScoreMetersWith,
+  submitScoreMeters,
   getNextTokenId,
-  mintRunNftWith,
+  mintRunNft,
 } from "@/lib/onchain";
-import type { Eip1193Provider } from "@/lib/wallet";
 
 // For local browser testing: we'll prefer MetaMask when multiple injected providers exist.
 const DEFAULT_INJECTED_WALLET = "metamask" as const;
@@ -88,10 +88,6 @@ export default function Page() {
   const [walletSource, setWalletSource] = useState<string>("");
   const [bestOnchainM, setBestOnchainM] = useState<number>(0);
 
-  // Keep the connected provider around so we don't re-trigger eth_requestAccounts
-  // on every onchain action (which can look like the wallet "isn't working").
-  const walletProviderRef = useRef<Eip1193Provider | null>(null);
-
   const [scoreBusy, setScoreBusy] = useState(false);
   const [mintBusy, setMintBusy] = useState(false);
   const [scoreTx, setScoreTx] = useState<string | null>(null);
@@ -120,6 +116,7 @@ export default function Page() {
   });
 
   const gameRef = useRef<HillClimbHandle | null>(null);
+  const walletRef = useRef<{ provider: any; address: string } | null>(null);
 
   useEffect(() => setHead(loadHead()), []);
 
@@ -345,10 +342,10 @@ export default function Page() {
   const ensureConnected = async () => {
     setActionErr("");
     const preferInjected = mini.isMini ? undefined : { allowMiniApp: false, prefer: DEFAULT_INJECTED_WALLET };
-    const { provider, address } = await connectWallet(preferInjected);
+    const { provider, address } = await getOrConnectWallet(preferInjected);
     await ensureBaseMainnet(provider);
-    walletProviderRef.current = provider;
     setWalletAddr(address);
+    walletRef.current = { provider, address };
 
     // Human-friendly provider label for debugging.
     const anyP: any = provider as any;
@@ -362,7 +359,7 @@ export default function Page() {
     setWalletSource(src);
 
     await refreshBest(address);
-    return { provider, address };
+    return address;
   };
 
   const onTryAgain = () => {
@@ -374,6 +371,9 @@ export default function Page() {
     setScoreTx(null);
     setMintTx(null);
     setActionErr("");
+    // Optional: clear cached wallet to re-test connect flows.
+    // (Does not affect Mini App wallets.)
+    if (!mini.isMini) clearCachedWallet();
     gameRef.current?.reset();
   };
 
@@ -388,13 +388,10 @@ export default function Page() {
       }
 
       setScoreBusy(true);
-      const connected = walletAddr && walletProviderRef.current
-        ? { provider: walletProviderRef.current, address: walletAddr }
-        : await ensureConnected();
-
-      const addr = connected.address;
+      const addr = walletAddr ?? (await ensureConnected());
       const meters = Math.max(0, Math.floor(gameOverMeters || state.distanceM));
-      const tx = await submitScoreMetersWith(connected.provider as any, connected.address as any, scoreboardAddress, meters);
+      const w = walletRef.current;
+      const tx = await submitScoreMeters(scoreboardAddress, meters, w ? { provider: w.provider, address: w.address as any } : undefined);
       setScoreTx(tx);
       await refreshBest(addr);
     } catch (e: any) {
@@ -419,10 +416,8 @@ export default function Page() {
       }
 
       setMintBusy(true);
-      const connected = walletAddr && walletProviderRef.current
-        ? { provider: walletProviderRef.current, address: walletAddr }
-        : await ensureConnected();
-      void connected;
+      const addr = walletAddr ?? (await ensureConnected());
+      void addr;
 
       const meters = Math.max(0, Math.floor(gameOverMeters || state.distanceM));
       const driverId = head === "jesse" ? 0 : 1;
@@ -451,7 +446,8 @@ export default function Page() {
       const out = (await resp.json()) as { tokenUri: string };
       if (!out?.tokenUri) throw new Error("Missing tokenUri from server");
 
-      const tx = await mintRunNftWith(connected.provider as any, connected.address as any, runNftAddress, meters, driverId, out.tokenUri);
+      const w = walletRef.current;
+      const tx = await mintRunNft(runNftAddress, meters, driverId, out.tokenUri, w ? { provider: w.provider, address: w.address as any } : undefined);
       setMintTx(tx);
     } catch (e: any) {
       setActionErr(e?.message ? String(e.message) : "Mint failed");
@@ -636,7 +632,7 @@ export default function Page() {
                           });
                         }}
                       >
-                        Connect wallet (MetaMask / injected)
+                        Connect wallet (MetaMask)
                       </button>
                     ) : null}
                     <button
