@@ -43,11 +43,14 @@ export async function ensureBaseMainnet(provider?: Eip1193Provider) {
       method: "wallet_switchEthereumChain",
       params: [{ chainId: BASE_CHAIN_ID_HEX }],
     });
-  } catch (e: any) {
-    // MetaMask uses error code 4902 to signal "unknown chain".
-    // Only in that case should we call wallet_addEthereumChain.
-    // Otherwise, surface the original error (e.g., user rejected request).
-    if (e?.code !== 4902) throw e;
+  } catch (err: any) {
+    // MetaMask (and other wallets) use error code 4902 for "unknown chain".
+    // If the user rejects (4001) or anything else happens, surface the error.
+    const code = err?.code ?? err?.data?.originalError?.code;
+    if (code !== 4902) {
+      const msg = err?.message ? String(err.message) : "Failed to switch network";
+      throw new Error(msg);
+    }
 
     await p.request({
       method: "wallet_addEthereumChain",
@@ -82,6 +85,24 @@ export async function connectWallet(
   return { provider, address: a0 as Address };
 }
 
+type ConnectedWallet = { provider: Eip1193Provider; address: Address };
+let cachedWallet: ConnectedWallet | null = null;
+
+/**
+ * Cache the connected wallet to avoid double "eth_requestAccounts" prompts.
+ * This is especially important when the page calls connect, then actions call connect again.
+ */
+export async function getOrConnectWallet(opts?: EthereumProviderOptions): Promise<ConnectedWallet> {
+  if (cachedWallet) return cachedWallet;
+  const w = await connectWallet(opts);
+  cachedWallet = w;
+  return w;
+}
+
+export function clearCachedWallet() {
+  cachedWallet = null;
+}
+
 function getWalletClient(provider: Eip1193Provider, address: Address) {
   return createWalletClient({
     chain: base,
@@ -101,31 +122,24 @@ export async function readBestMeters(scoreboardAddress: string, playerAddress: s
   })) as bigint;
 }
 
-export async function submitScoreMeters(scoreboardAddress: string, meters: number): Promise<string> {
-  const { provider, address } = await connectWallet();
-  return submitScoreMetersWith(provider, address, scoreboardAddress, meters);
-}
-
-/**
- * Use an already-connected wallet provider/address.
- * This avoids double-connecting (which can look like "MetaMask isn't working").
- */
-export async function submitScoreMetersWith(
-  provider: Eip1193Provider,
-  address: Address,
+export async function submitScoreMeters(
   scoreboardAddress: string,
   meters: number,
+  wallet?: ConnectedWallet,
 ): Promise<string> {
-  if (!scoreboardAddress) throw new Error("Missing scoreboard address");
+  const { provider, address } = wallet ?? (await getOrConnectWallet());
   await ensureBaseMainnet(provider);
+
   const client = getWalletClient(provider, address);
   const m = BigInt(Math.max(0, Math.floor(meters)));
+
   const hash = await client.writeContract({
     address: scoreboardAddress as Address,
     abi: scoreboardAbi,
     functionName: "submitScore",
     args: [m],
   });
+
   return String(hash);
 }
 
@@ -140,29 +154,27 @@ export async function getNextTokenId(runNftAddress: string): Promise<bigint> {
   })) as bigint;
 }
 
-export async function mintRunNft(runNftAddress: string, meters: number, driverId: number, tokenUri: string): Promise<string> {
-  const { provider, address } = await connectWallet();
-  return mintRunNftWith(provider, address, runNftAddress, meters, driverId, tokenUri);
-}
-
-export async function mintRunNftWith(
-  provider: Eip1193Provider,
-  address: Address,
+export async function mintRunNft(
   runNftAddress: string,
   meters: number,
   driverId: number,
   tokenUri: string,
+  wallet?: ConnectedWallet,
 ): Promise<string> {
-  if (!runNftAddress) throw new Error("Missing RunNFT address");
+  const { provider, address } = wallet ?? (await getOrConnectWallet());
   await ensureBaseMainnet(provider);
+
   const client = getWalletClient(provider, address);
+
   const m = BigInt(Math.max(0, Math.floor(meters)));
   const did = Math.max(0, Math.min(255, Math.floor(driverId)));
+
   const hash = await client.writeContract({
     address: runNftAddress as Address,
     abi: runNftAbi,
     functionName: "mintRun",
     args: [m, did, tokenUri],
   });
+
   return String(hash);
 }
