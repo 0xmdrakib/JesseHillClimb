@@ -72,9 +72,16 @@ a{color:inherit}
 .shellMini{
   /* Fill the full viewport in embedded webviews (avoid 1px right-side stripes). */
   position: fixed;
+  /* IMPORTANT: don't set an explicit `width: 100vw` here.
+     Some embedded webviews compute `vw` off a slightly different viewport than
+     the fixed positioning inset, which can leave a thin right-side stripe.
+     Using only `inset` makes the box follow the same viewport the compositor
+     uses for fixed positioning. */
   inset: 0;
-  width: 100vw;
-  height: 100dvh;
+  width: auto;
+  height: auto;
+  min-width: 100%;
+  min-height: 100dvh;
   border-radius:0;
   border:0;
   box-shadow:none;
@@ -788,7 +795,7 @@ canvas{
 
 /* Mini App: avoid a small unused strip on the right side in some webviews */
 .shellMini{overflow-x:hidden;}
-.mainMini{width:100vw;}
+.mainMini{width:100%;}
 .shellMini .stage{width:100%;}
 
 /* Mini App layout tightening for phones */
