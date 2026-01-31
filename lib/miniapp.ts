@@ -9,6 +9,7 @@
 type MiniAppSdk = any;
 
 let _sdkPromise: Promise<MiniAppSdk | null> | null = null;
+let _isMiniPromise: Promise<boolean> | null = null;
 
 export async function getMiniAppSdk(): Promise<MiniAppSdk | null> {
   if (typeof window === "undefined") return null;
@@ -24,6 +25,28 @@ export async function getMiniAppSdk(): Promise<MiniAppSdk | null> {
   })();
 
   return _sdkPromise;
+}
+
+/**
+ * True only when the page is actually running inside a Farcaster Mini App host.
+ * IMPORTANT: importing the SDK in a normal browser still succeeds, so we must
+ * not treat "SDK exists" as "we are in a Mini App".
+ */
+export async function isInMiniApp(): Promise<boolean> {
+  if (typeof window === "undefined") return false;
+  if (_isMiniPromise) return _isMiniPromise;
+
+  _isMiniPromise = (async () => {
+    try {
+      const sdk = await getMiniAppSdk();
+      if (!sdk?.isInMiniApp) return false;
+      return Boolean(await sdk.isInMiniApp());
+    } catch {
+      return false;
+    }
+  })();
+
+  return _isMiniPromise;
 }
 
 export function setSafeAreaCssVars(insets?: {
@@ -43,6 +66,10 @@ export function setSafeAreaCssVars(insets?: {
 export async function initMiniApp() {
   const sdk = await getMiniAppSdk();
   if (!sdk) return { sdk: null as MiniAppSdk | null, fid: null as number | null };
+
+  // Only enable Mini App behaviors when actually embedded in a host.
+  const inMini = await isInMiniApp();
+  if (!inMini) return { sdk: null as MiniAppSdk | null, fid: null as number | null };
 
   try {
     // Helps gesture-heavy apps (like hold-to-gas/brake) inside embedded webviews.
@@ -68,6 +95,7 @@ export async function composeCast(params: {
 }) {
   const sdk = await getMiniAppSdk();
   if (!sdk?.actions?.composeCast) return false;
+  if (!(await isInMiniApp())) return false;
   try {
     await sdk.actions.composeCast(params);
     return true;
@@ -79,6 +107,7 @@ export async function composeCast(params: {
 export async function addMiniApp() {
   const sdk = await getMiniAppSdk();
   if (!sdk?.actions?.addMiniApp) return false;
+  if (!(await isInMiniApp())) return false;
   try {
     await sdk.actions.addMiniApp();
     return true;
