@@ -30,6 +30,7 @@ html,body{
   margin:0;
   overscroll-behavior:none;
   overflow:hidden; /* kill both vertical + horizontal scrollbars */
+  background: linear-gradient(#f5fbff, #e9f6ff);
 }
 body{
   margin:0;
@@ -43,6 +44,9 @@ body{
 *{scrollbar-width:none;}
 *::-webkit-scrollbar{width:0;height:0;}
 body.miniBody{
+  background: var(--sky);
+}
+html.miniHtml{
   background: var(--sky);
 }
 a{color:inherit}
@@ -66,8 +70,11 @@ a{color:inherit}
   overflow:hidden;
 }
 .shellMini{
-  width:100%;
-  min-height:100vh;
+  /* Fill the full viewport in embedded webviews (avoid 1px right-side stripes). */
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
   border-radius:0;
   border:0;
   box-shadow:none;
@@ -780,8 +787,8 @@ canvas{
 }
 
 /* Mini App: avoid a small unused strip on the right side in some webviews */
-.shellMini{width:100%; max-width:100%; overflow-x:hidden;}
-.mainMini{width:100%;}
+.shellMini{overflow-x:hidden;}
+.mainMini{width:100vw;}
 .shellMini .stage{width:100%;}
 
 /* Mini App layout tightening for phones */
