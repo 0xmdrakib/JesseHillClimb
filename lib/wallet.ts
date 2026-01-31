@@ -1,6 +1,6 @@
 "use client";
 
-import { getMiniAppSdk } from "@/lib/miniapp";
+import { getMiniAppSdk, isInMiniApp } from "@/lib/miniapp";
 
 export type Eip1193Provider = {
   request: (args: { method: string; params?: any }) => Promise<any>;
@@ -47,6 +47,18 @@ async function discoverEip6963Providers(timeoutMs = 250): Promise<EIP6963Provide
   return out;
 }
 
+function dedupeByRef<T extends { provider: Eip1193Provider }>(arr: T[]): T[] {
+  const seen = new Set<any>();
+  const out: T[] = [];
+  for (const it of arr) {
+    if (!it?.provider) continue;
+    if (seen.has(it.provider as any)) continue;
+    seen.add(it.provider as any);
+    out.push(it);
+  }
+  return out;
+}
+
 function pickInjectedProvider(opts?: EthereumProviderOptions): Eip1193Provider | null {
   const prefer = opts?.prefer ?? "metamask";
 
@@ -85,10 +97,15 @@ export async function getEthereumProvider(opts?: EthereumProviderOptions): Promi
   // Prefer the Mini App wallet provider when available.
   if (opts?.allowMiniApp !== false) {
     try {
-      const sdk: any = await getMiniAppSdk();
-      if (sdk && sdk.wallet && typeof sdk.wallet.getEthereumProvider === "function") {
-        const p: any = await sdk.wallet.getEthereumProvider();
-        if (p && typeof p.request === "function") return p as Eip1193Provider;
+      // NOTE: importing the SDK in a normal browser still succeeds.
+      // We must only use the host wallet provider when *actually* in a Mini App.
+      const inMini = await isInMiniApp();
+      if (inMini) {
+        const sdk: any = await getMiniAppSdk();
+        if (sdk && sdk.wallet && typeof sdk.wallet.getEthereumProvider === "function") {
+          const p: any = await sdk.wallet.getEthereumProvider();
+          if (p && typeof p.request === "function") return p as Eip1193Provider;
+        }
       }
     } catch {
       // ignore
@@ -99,7 +116,7 @@ export async function getEthereumProvider(opts?: EthereumProviderOptions): Promi
   // First try EIP-6963 multi-provider discovery.
   try {
     const prefer = opts?.prefer ?? "metamask";
-    const announced = await discoverEip6963Providers(250);
+    const announced = dedupeByRef(await discoverEip6963Providers(800));
     if (announced.length) {
       const pick = (d: EIP6963ProviderDetail) => {
         const p: any = d.provider as any;
