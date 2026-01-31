@@ -15,8 +15,8 @@ import {
   mintRunNft,
 } from "@/lib/onchain";
 
-// For local browser testing: we'll prefer MetaMask when multiple injected providers exist.
-const DEFAULT_INJECTED_WALLET = "metamask" as const;
+// Browser wallets: don't assume MetaMask. Prefer "any" (EIP-6963 will still pick a sensible default).
+const DEFAULT_INJECTED_WALLET = "any" as const;
 
 function clamp01(n: number) {
   return Math.max(0, Math.min(1, n));
@@ -179,7 +179,11 @@ export default function Page() {
   useEffect(() => {
     if (!mini.isMini) return;
     document.body.classList.add("miniBody");
-    return () => document.body.classList.remove("miniBody");
+    document.documentElement.classList.add("miniHtml");
+    return () => {
+      document.body.classList.remove("miniBody");
+      document.documentElement.classList.remove("miniHtml");
+    };
   }, [mini.isMini]);
 
   // Mini App sizing helpers
@@ -632,7 +636,7 @@ export default function Page() {
                           });
                         }}
                       >
-                        Connect wallet (MetaMask)
+                        Connect wallet
                       </button>
                     ) : null}
                     <button
