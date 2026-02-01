@@ -12,6 +12,7 @@ import { base } from "viem/chains";
 import {
   getEthereumProvider,
   requestAccounts,
+  getAccounts,
   getChainId,
   type Eip1193Provider,
   type EthereumProviderOptions,
@@ -44,8 +45,6 @@ export async function ensureBaseMainnet(provider?: Eip1193Provider) {
       params: [{ chainId: BASE_CHAIN_ID_HEX }],
     });
   } catch (err: any) {
-    // MetaMask (and other wallets) use error code 4902 for "unknown chain".
-    // If the user rejects (4001) or anything else happens, surface the error.
     const code = err?.code ?? err?.data?.originalError?.code;
     if (code !== 4902) {
       const msg = err?.message ? String(err.message) : "Failed to switch network";
@@ -78,19 +77,24 @@ export async function connectWallet(
   const provider = await getEthereumProvider(opts);
   if (!provider) throw new Error("No wallet provider found");
 
-  const accounts = await requestAccounts(provider);
-  const a0 = accounts?.[0];
-  if (!a0) throw new Error("Wallet connection rejected");
+  // Prefer a silent check first (no popups).
+  const existing = await getAccounts(provider);
+  const a0 = existing?.[0];
+  if (a0) return { provider, address: a0 as Address };
 
-  return { provider, address: a0 as Address };
+  // Otherwise, request accounts (may prompt).
+  const requested = await requestAccounts(provider);
+  const r0 = requested?.[0];
+  if (!r0) throw new Error("Wallet connection rejected");
+
+  return { provider, address: r0 as Address };
 }
 
 type ConnectedWallet = { provider: Eip1193Provider; address: Address };
 let cachedWallet: ConnectedWallet | null = null;
 
 /**
- * Cache the connected wallet to avoid double "eth_requestAccounts" prompts.
- * This is especially important when the page calls connect, then actions call connect again.
+ * Cache the connected wallet to avoid double prompts.
  */
 export async function getOrConnectWallet(opts?: EthereumProviderOptions): Promise<ConnectedWallet> {
   if (cachedWallet) return cachedWallet;
@@ -99,8 +103,27 @@ export async function getOrConnectWallet(opts?: EthereumProviderOptions): Promis
   return w;
 }
 
+export function primeCachedWallet(wallet: ConnectedWallet | null) {
+  cachedWallet = wallet;
+}
+
 export function clearCachedWallet() {
   cachedWallet = null;
+}
+
+/**
+ * Silent auto-connect helper: returns null if not already connected (no popups).
+ * This is used on normal web to reconnect the last-used injected wallet.
+ */
+export async function tryAutoConnectWallet(opts?: EthereumProviderOptions): Promise<ConnectedWallet | null> {
+  const provider = await getEthereumProvider(opts);
+  if (!provider) return null;
+  const accounts = await getAccounts(provider);
+  const a0 = accounts?.[0];
+  if (!a0) return null;
+  const w = { provider, address: a0 as Address };
+  cachedWallet = w;
+  return w;
 }
 
 function getWalletClient(provider: Eip1193Provider, address: Address) {
