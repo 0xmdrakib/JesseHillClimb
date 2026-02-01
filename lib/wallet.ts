@@ -11,6 +11,8 @@ export type EthereumProviderOptions = {
   prefer?: "any" | "metamask" | "coinbase";
   /** If false, skip the Mini App host provider and only use injected wallets (useful for local browser testing). */
   allowMiniApp?: boolean;
+  /** If provided, pick a specific injected wallet by id (EIP-6963 rdns/uuid, or fallback injected id). */
+  walletId?: string;
 };
 
 type EIP6963ProviderInfo = {
@@ -22,6 +24,14 @@ type EIP6963ProviderInfo = {
 
 type EIP6963ProviderDetail = {
   info: EIP6963ProviderInfo;
+  provider: Eip1193Provider;
+};
+
+export type InjectedWallet = {
+  id: string;
+  name: string;
+  icon?: string;
+  rdns?: string;
   provider: Eip1193Provider;
 };
 
@@ -47,7 +57,7 @@ async function discoverEip6963Providers(timeoutMs = 250): Promise<EIP6963Provide
   return out;
 }
 
-function dedupeByRef<T extends { provider: Eip1193Provider }>(arr: T[]): T[] {
+function dedupeByProviderRef<T extends { provider: Eip1193Provider }>(arr: T[]): T[] {
   const seen = new Set<any>();
   const out: T[] = [];
   for (const it of arr) {
@@ -59,36 +69,85 @@ function dedupeByRef<T extends { provider: Eip1193Provider }>(arr: T[]): T[] {
   return out;
 }
 
-function pickInjectedProvider(opts?: EthereumProviderOptions): Eip1193Provider | null {
-  const prefer = opts?.prefer ?? "metamask";
+function normalizeWalletName(name: string) {
+  const n = String(name ?? "").trim();
+  if (!n) return "Injected wallet";
+  return n.length > 32 ? n.slice(0, 32) + "…" : n;
+}
 
-  const anyWin: any = window as any;
-  const eth: any = anyWin.ethereum;
-  if (!eth) return null;
+function walletIdFromEip6963(info: EIP6963ProviderInfo): string {
+  const rdns = (info?.rdns ?? "").trim();
+  if (rdns) return `eip6963:${rdns.toLowerCase()}`;
+  const uuid = (info?.uuid ?? "").trim();
+  return uuid ? `eip6963:${uuid}` : "eip6963:unknown";
+}
 
-  // Modern multi-wallet discovery (EIP-6963). This avoids the "wrong provider" problem
-  // when the user has multiple extensions installed.
-  // We keep this best-effort and fall back to window.ethereum if nothing announces.
-  // NOTE: this function is sync; EIP-6963 is handled in getEthereumProvider().
+function fallbackWalletLabel(p: any) {
+  if (p?.isMetaMask) return "MetaMask";
+  if (p?.isCoinbaseWallet) return "Coinbase Wallet";
+  return "Injected wallet";
+}
 
-  // Some environments expose multiple providers.
-  const providers: any[] | undefined = Array.isArray(eth.providers) ? eth.providers : undefined;
-  if (!providers || providers.length === 0) {
-    return typeof eth.request === "function" ? (eth as Eip1193Provider) : null;
+/**
+ * List injected wallets in the browser.
+ * Uses EIP-6963 multi-provider discovery when available, with fallbacks to window.ethereum/providers.
+ */
+export async function listInjectedWallets(timeoutMs = 600): Promise<InjectedWallet[]> {
+  if (typeof window === "undefined") return [];
+
+  const out: InjectedWallet[] = [];
+
+  // 1) EIP-6963
+  try {
+    const announced = await discoverEip6963Providers(timeoutMs);
+    for (const d of announced) {
+      if (!d?.provider) continue;
+      const id = walletIdFromEip6963(d.info);
+      out.push({
+        id,
+        name: normalizeWalletName(d.info?.name ?? "Wallet"),
+        icon: d.info?.icon,
+        rdns: d.info?.rdns,
+        provider: d.provider,
+      });
+    }
+  } catch {
+    // ignore
   }
 
-  const byFlag = (p: any) => {
-    if (prefer === "metamask") return Boolean(p?.isMetaMask);
-    if (prefer === "coinbase") return Boolean(p?.isCoinbaseWallet);
-    return true;
-  };
+  // 2) window.ethereum.providers
+  try {
+    const anyWin: any = window as any;
+    const eth: any = anyWin.ethereum;
+    const providers: any[] | undefined = Array.isArray(eth?.providers) ? eth.providers : undefined;
 
-  const chosen =
-    (prefer !== "any" ? providers.find(byFlag) : null) ||
-    providers.find((p) => typeof p?.request === "function") ||
+    if (providers && providers.length) {
+      providers.forEach((p, i) => {
+        if (!p || typeof p.request !== "function") return;
+        const label = fallbackWalletLabel(p);
+        const id = `injected:${label.toLowerCase().replace(/\s+/g, "")}:${i}`;
+        out.push({ id, name: label, provider: p as Eip1193Provider });
+      });
+    } else if (eth && typeof eth.request === "function") {
+      out.push({ id: "injected:default", name: fallbackWalletLabel(eth), provider: eth as Eip1193Provider });
+    }
+  } catch {
+    // ignore
+  }
+
+  return dedupeByProviderRef(out);
+}
+
+function pickByPrefer(wallets: InjectedWallet[], prefer: "any" | "metamask" | "coinbase"): InjectedWallet | null {
+  if (!wallets.length) return null;
+  if (prefer === "any") return wallets[0] ?? null;
+
+  const want = prefer === "metamask" ? "metamask" : "coinbase";
+  const found =
+    wallets.find((w) => w.id.includes(want)) ||
+    wallets.find((w) => w.name.toLowerCase().includes(want)) ||
     null;
-
-  return chosen && typeof chosen.request === "function" ? (chosen as Eip1193Provider) : null;
+  return found ?? wallets[0] ?? null;
 }
 
 export async function getEthereumProvider(opts?: EthereumProviderOptions): Promise<Eip1193Provider | null> {
@@ -113,39 +172,30 @@ export async function getEthereumProvider(opts?: EthereumProviderOptions): Promi
   }
 
   // Browser wallet fallback (e.g., MetaMask, Coinbase Wallet extension).
-  // First try EIP-6963 multi-provider discovery.
-  try {
-    const prefer = opts?.prefer ?? "metamask";
-    const announced = dedupeByRef(await discoverEip6963Providers(800));
-    if (announced.length) {
-      const pick = (d: EIP6963ProviderDetail) => {
-        const p: any = d.provider as any;
-        const name = String(d.info?.name ?? "").toLowerCase();
-        const rdns = String(d.info?.rdns ?? "").toLowerCase();
-        if (prefer === "metamask") return Boolean(p?.isMetaMask) || name.includes("metamask") || rdns.includes("metamask");
-        if (prefer === "coinbase") return Boolean(p?.isCoinbaseWallet) || name.includes("coinbase") || rdns.includes("coinbase");
-        return true;
-      };
+  const prefer = opts?.prefer ?? "any";
 
-      const chosen =
-        (prefer !== "any" ? announced.find(pick) : null) ||
-        announced.find((d) => typeof (d.provider as any)?.request === "function") ||
-        null;
-
-      if (chosen?.provider) return chosen.provider;
-    }
-  } catch {
-    // ignore
+  // If a specific wallet id is requested, pick it if present.
+  if (opts?.walletId) {
+    const wallets = await listInjectedWallets(900);
+    const match = wallets.find((w) => w.id === opts.walletId) || null;
+    if (match) return match.provider;
   }
 
-  const injected = pickInjectedProvider(opts);
-  if (injected) return injected;
+  // Otherwise pick a sensible default.
+  const wallets = await listInjectedWallets(900);
+  const chosen = pickByPrefer(wallets, prefer);
+  if (chosen) return chosen.provider;
 
   return null;
 }
 
 export async function requestAccounts(provider: Eip1193Provider): Promise<string[]> {
   const accounts = (await provider.request({ method: "eth_requestAccounts" })) as string[];
+  return Array.isArray(accounts) ? accounts : [];
+}
+
+export async function getAccounts(provider: Eip1193Provider): Promise<string[]> {
+  const accounts = (await provider.request({ method: "eth_accounts" })) as string[];
   return Array.isArray(accounts) ? accounts : [];
 }
 
