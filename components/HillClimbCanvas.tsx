@@ -569,16 +569,36 @@ export const HillClimbCanvas = forwardRef<
         const c = canvasRef.current;
         if (!c) return null;
 
-        // Downscale for reasonable token image size.
-        const targetW = 640;
-        const ratio = c.height / Math.max(1, c.width);
-        const targetH = Math.max(360, Math.round(targetW * ratio));
+        // Stable landscape snapshot (16:9) so Mini App virtual-rotation does not produce portrait/ugly NFTs.
+        // Center-crop the source canvas into 960×540.
+        const outW = 960;
+        const outH = 540;
+        const outAspect = outW / outH;
 
-        offscreenSnap.width = targetW;
-        offscreenSnap.height = targetH;
+        const srcW = Math.max(1, c.width);
+        const srcH = Math.max(1, c.height);
+        const srcAspect = srcW / srcH;
+
+        let sx = 0, sy = 0, sw = srcW, sh = srcH;
+        if (srcAspect > outAspect) {
+          // Crop width
+          sw = Math.floor(srcH * outAspect);
+          sx = Math.floor((srcW - sw) / 2);
+        } else if (srcAspect < outAspect) {
+          // Crop height
+          sh = Math.floor(srcW / outAspect);
+          sy = Math.floor((srcH - sh) / 2);
+        }
+
+        offscreenSnap.width = outW;
+        offscreenSnap.height = outH;
         const octx = offscreenSnap.getContext("2d");
         if (!octx) return null;
-        octx.drawImage(c, 0, 0, offscreenSnap.width, offscreenSnap.height);
+
+        octx.imageSmoothingEnabled = true;
+        // @ts-ignore
+        octx.imageSmoothingQuality = "high";
+        octx.drawImage(c, sx, sy, sw, sh, 0, 0, outW, outH);
         return offscreenSnap.toDataURL("image/png");
       } catch {
         return null;
@@ -664,25 +684,25 @@ export const HillClimbCanvas = forwardRef<
       const rect = c.getBoundingClientRect();
       const dpr = window.devicePixelRatio || 1;
 
-      // Stabilize sub-pixel layout jitter (common in embedded webviews) to avoid resize-thrashing.
-      const cssW = Math.max(1, Math.round(rect.width));
-      const cssH = Math.max(1, Math.round(rect.height));
+      // IMPORTANT: In Mini Apps we rotate the UI via CSS transforms in portrait.
+      // getBoundingClientRect() returns transformed sizes, which can swap/round dimensions.
+      // Using clientWidth/clientHeight gives the pre-transform layout size and prevents 1–2px underfill stripes.
+      const cssW = Math.max(1, Math.ceil(c.clientWidth || rect.width));
+      const cssH = Math.max(1, Math.ceil(c.clientHeight || rect.height));
 
       // Recompute render scale from visible width (keeps phone landscape nicely framed).
       // Desktop remains unchanged because we cap at the original 45 px/m.
       SCALE = Math.min(45, Math.max(28, cssW / 20));
 
-      const pxW = Math.max(1, Math.round(cssW * dpr));
-      const pxH = Math.max(1, Math.round(cssH * dpr));
+      const pxW = Math.max(1, Math.ceil(cssW * dpr));
+      const pxH = Math.max(1, Math.ceil(cssH * dpr));
 
-      // Avoid clearing the canvas for tiny oscillations.
-      // Only apply if we changed by at least 2 device pixels (prevents "blink").
-      if (Math.abs(pxW - lastPxW) >= 2 || Math.abs(pxH - lastPxH) >= 2) {
-        if (c.width !== pxW) c.width = pxW;
-        if (c.height !== pxH) c.height = pxH;
-        lastPxW = pxW;
-        lastPxH = pxH;
-      }
+      // Always ensure the backing buffer is at least as large as the visible CSS box.
+      // This avoids the right-side "gutter" / unrendered strip caused by rounding down.
+      if (c.width !== pxW) c.width = pxW;
+      if (c.height !== pxH) c.height = pxH;
+      lastPxW = pxW;
+      lastPxH = pxH;
 
       // Responsive "contain" scaling: keep roughly a consistent world width visible.
       // - Desktop: close to the original 45 px/m feel.
