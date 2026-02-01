@@ -72,16 +72,9 @@ a{color:inherit}
 .shellMini{
   /* Fill the full viewport in embedded webviews (avoid 1px right-side stripes). */
   position: fixed;
-  /* IMPORTANT: don't set an explicit `width: 100vw` here.
-     Some embedded webviews compute `vw` off a slightly different viewport than
-     the fixed positioning inset, which can leave a thin right-side stripe.
-     Using only `inset` makes the box follow the same viewport the compositor
-     uses for fixed positioning. */
   inset: 0;
-  width: auto;
-  height: auto;
-  min-width: 100%;
-  min-height: 100dvh;
+  width: 100vw;
+  height: 100dvh;
   border-radius:0;
   border:0;
   box-shadow:none;
@@ -795,7 +788,7 @@ canvas{
 
 /* Mini App: avoid a small unused strip on the right side in some webviews */
 .shellMini{overflow-x:hidden;}
-.mainMini{width:100%;}
+.mainMini{width:100vw;}
 .shellMini .stage{width:100%;}
 
 /* Mini App layout tightening for phones */
@@ -918,4 +911,155 @@ canvas{
   font-weight: 800;
   opacity: .9;
   max-width: 240px;
+}
+
+
+/* ==========================================================================
+   Fullscreen hardening (web + Base/Farcaster Mini Apps)
+   - Avoid 100vw in embedded webviews (causes right-side "gutter" / stripe)
+   - Use inset-based sizing to match the actual layout viewport
+   - Make stage flex-fill so the game always reaches the right edge
+   ========================================================================== */
+
+html, body{
+  background: var(--sky) !important;
+}
+
+/* True fullscreen: remove outer padding/card chrome on normal web too */
+.main{
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0 !important;
+  margin: 0;
+  overflow: hidden;
+  background: var(--sky);
+  display: flex;
+}
+
+/* Fill the viewport regardless of host/webview quirks */
+.shell{
+  position: absolute;
+  inset: 0;
+  width: auto;
+  height: auto;
+  border-radius: 0 !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  background: var(--sky) !important;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Mini App uses the same fullscreen container */
+.shellMini{
+  inset: 0;
+  width: auto;
+  height: auto;
+}
+
+/* Let the stage consume all remaining space below the header */
+.stage{
+  flex: 1;
+  height: auto !important;
+  min-height: 0;
+}
+.shellMini .stage{
+  height: auto !important;
+}
+
+/* IMPORTANT: never force 100vw in Mini Apps (creates the right-side gap) */
+.mainMini{
+  width: 100% !important;
+}
+
+/* Game over dialog: must be scrollable on small landscape mini-app viewports */
+.endScreen{
+  display: flex !important;
+  align-items: flex-start;
+  justify-content: center;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  padding:
+    calc(12px + var(--safe-top))
+    calc(12px + var(--safe-right))
+    calc(12px + var(--safe-bottom))
+    calc(12px + var(--safe-left));
+}
+.endCard{
+  max-height: 100%;
+  overflow: auto;
+}
+
+/* Wallet picker (normal web injected wallets) */
+.walletModal{
+  pointer-events: auto;
+  position: absolute;
+  inset: 0;
+  background: rgba(245,251,255,.55);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  padding:
+    calc(68px + var(--safe-top))
+    calc(12px + var(--safe-right))
+    calc(12px + var(--safe-bottom))
+    calc(12px + var(--safe-left));
+  z-index: 80;
+}
+.walletCard{
+  width: min(420px, calc(100% - 24px));
+  background: rgba(255,255,255,.92);
+  border: 1px solid rgba(0,0,0,.10);
+  border-radius: 18px;
+  box-shadow: 0 30px 80px rgba(0,0,0,.18);
+  padding: 14px;
+}
+.walletCardTop{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:10px;
+}
+.walletTitle{
+  font-weight:1000;
+  letter-spacing:.4px;
+}
+.walletList{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+.walletRow{
+  appearance:none;
+  cursor:pointer;
+  border-radius:14px;
+  border:1px solid rgba(0,0,0,.12);
+  background: rgba(255,255,255,.75);
+  padding:10px 12px;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  text-align:left;
+  font-weight:900;
+}
+.walletRow:active{transform: translateY(1px)}
+.walletIcon{
+  width:28px;
+  height:28px;
+  border-radius:8px;
+  background: rgba(0,0,0,.06);
+  border:1px solid rgba(0,0,0,.08);
+}
+.walletHint{
+  margin-top:10px;
+  font-size:12px;
+  font-weight:800;
+  opacity:.72;
 }
