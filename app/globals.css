@@ -73,7 +73,7 @@ a{color:inherit}
   /* Fill the full viewport in embedded webviews (avoid 1px right-side stripes). */
   position: fixed;
   inset: 0;
-  width: 100vw;
+  width: 100%;
   height: 100dvh;
   border-radius:0;
   border:0;
@@ -788,7 +788,7 @@ canvas{
 
 /* Mini App: avoid a small unused strip on the right side in some webviews */
 .shellMini{overflow-x:hidden;}
-.mainMini{width:100vw;}
+.mainMini{width:100%;}
 .shellMini .stage{width:100%;}
 
 /* Mini App layout tightening for phones */
@@ -1063,3 +1063,129 @@ html, body{
   font-weight:800;
   opacity:.72;
 }
+
+
+/* =====================================================================
+   FIXES (v3): remove right-side gutter, improve Mini App landscape render,
+   overlay rotate hint, and ensure end-screen scroll + layering.
+   ===================================================================== */
+
+/* 1) Never use 100vw in fullscreen shells — it can include scrollbar width and create a right gutter. */
+html, body {
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+/* Ensure the app always fills the layout viewport without horizontal overflow */
+.main, .mainMini, .shell, .shellMini, .stage {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+/* Fullscreen shells (web + mini) */
+.shell, .shellMini{
+  position: fixed !important;
+  inset: 0 !important;
+  height: 100% !important;
+  margin: 0 !important;
+}
+
+/* Canvas must never underfill its container */
+.stage canvas{
+  display:block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* 2) Mini App "virtual landscape" rotation: include visualViewport offsets (webviews can shift the viewport). */
+.shellMini.miniVirtualLandscape{
+  top: calc(var(--vvh) + var(--vvoffsettop)) !important;
+  left: var(--vvoffsetleft) !important;
+  width: var(--lvw) !important;
+  height: var(--lvh) !important;
+  transform-origin: top left !important;
+  transform: rotate(-90deg) !important;
+}
+
+/* Tighten header in rotated portrait (host app already has chrome) */
+.shellMini.miniVirtualLandscape .headerMini{
+  padding-top: 8px !important;
+  padding-bottom: 8px !important;
+}
+.shellMini.miniVirtualLandscape .title{
+  font-size: 18px !important;
+}
+
+/* Scale HUD + controls so everything fits even on small mini-app viewports */
+.shellMini.miniVirtualLandscape .hud{
+  transform: scale(var(--mini-ui-scale)) !important;
+  transform-origin: top left !important;
+}
+.shellMini.miniVirtualLandscape .controls{
+  transform: scale(var(--mini-ui-scale)) !important;
+  transform-origin: bottom left !important;
+}
+.shellMini.miniVirtualLandscape .gauges{
+  transform: scale(var(--mini-ui-scale)) !important;
+  transform-origin: bottom center !important;
+}
+.shellMini.miniVirtualLandscape .driverBtn{
+  transform: scale(var(--mini-ui-scale)) !important;
+  transform-origin: top right !important;
+}
+
+/* 3) End screen must always be on top and scrollable */
+.endScreen{
+  z-index: 200 !important;
+  pointer-events: auto;
+}
+.playfield.endActive .controls,
+.playfield.endActive .gauges,
+.playfield.endActive .driverBtn{
+  pointer-events: none !important;
+  opacity: .25;
+  filter: blur(1.5px);
+}
+
+/* Make long errors readable but not massive */
+.endOnchainErr{
+  max-height: 6.5em;
+  overflow: auto;
+  word-break: break-word;
+  white-space: normal;
+}
+
+/* 4) Rotate overlay (portrait-only in Mini Apps) */
+.rotateOverlay{
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  display: grid;
+  place-items: center;
+  background: rgba(10,20,30,.28);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  padding: 18px;
+}
+.rotateOverlayCard{
+  width: min(360px, 100%);
+  background: rgba(255,255,255,.92);
+  border: 1px solid rgba(0,0,0,.12);
+  border-radius: 18px;
+  box-shadow: 0 24px 70px rgba(0,0,0,.22);
+  padding: 16px 14px;
+  text-align: center;
+}
+.rotateOverlayTitle{
+  font-weight: 1000;
+  font-size: 18px;
+  letter-spacing: .2px;
+}
+.rotateOverlaySub{
+  margin-top: 6px;
+  font-weight: 800;
+  opacity: .75;
+  font-size: 13px;
+}
+
