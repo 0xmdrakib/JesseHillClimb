@@ -45,32 +45,31 @@ function shortHash(h?: string | null) {
   return `${h.slice(0, 6)}…${h.slice(-4)}`;
 }
 
-
-function formatActionError(e: any, fallback: string) {
-  // viem errors often include huge "Request Arguments" / "Docs" sections; strip them.
+function formatActionError(err: unknown, fallback = "Transaction failed") {
+  // viem errors can contain huge debug blocks; show a short, user-safe message.
   const raw =
-    (typeof e?.shortMessage === "string" && e.shortMessage) ||
-    (typeof e?.message === "string" && e.message) ||
-    fallback;
+    (err as any)?.shortMessage ??
+    (err as any)?.message ??
+    (err as any)?.cause?.shortMessage ??
+    (err as any)?.cause?.message ??
+    "";
+  const msg = String(raw || fallback);
 
-  let s = String(raw || fallback);
+  // User rejected / denied
+  if (/user rejected|rejected the request|denied|declined|canceled|cancelled/i.test(msg)) {
+    return "Transaction cancelled in your wallet.";
+  }
 
-  // Common wallet UX mapping
-  if (/user rejected|user denied|rejected the request|denied transaction/i.test(s)) return "Transaction cancelled in your wallet.";
-  if (/insufficient funds/i.test(s)) return "Insufficient funds for gas.";
-  if (/chain disconnected|network error|disconnected/i.test(s)) return "Wallet/network error. Please try again.";
+  // Strip common verbose tails
+  const stripped = msg
+    .split("Request Arguments:")[0]
+    .split("Docs:")[0]
+    .split("MetaMask Tx Signature:")[0]
+    .trim();
 
-  // Remove verbose tails
-  s = s.split("Request Arguments:")[0];
-  s = s.split("Docs:")[0];
-  s = s.split("Version:")[0];
-
-  // Collapse whitespace
-  s = s.replace(/\s+/g, " ").trim();
-
-  // Keep it compact
-  if (s.length > 180) s = s.slice(0, 177) + "…";
-  return s || fallback;
+  // Clamp to avoid giant UI blocks
+  if (stripped.length > 180) return stripped.slice(0, 177) + "…";
+  return stripped || fallback;
 }
 
 
@@ -231,6 +230,9 @@ export default function Page() {
       raf = requestAnimationFrame(() => {
         const w = vv?.width ?? window.innerWidth;
         const h = vv?.height ?? window.innerHeight;
+
+        // Ignore tiny oscillations (common in embedded webviews) to prevent flicker.
+        if (Math.abs(w - lastW) < 1 && Math.abs(h - lastH) < 1) return;
         lastW = w;
         lastH = h;
 
@@ -240,12 +242,6 @@ export default function Page() {
         // Visual viewport dims
         root.style.setProperty("--vvw", `${ww}px`);
         root.style.setProperty("--vvh", `${hh}px`);
-
-        // Visual viewport offsets (helpful in embedded webviews with top/bottom chrome)
-        const ot = Math.round(vv?.offsetTop ?? 0);
-        const ol = Math.round(vv?.offsetLeft ?? 0);
-        root.style.setProperty("--vvoffsettop", `${ot}px`);
-        root.style.setProperty("--vvoffsetleft", `${ol}px`);
 
         // Landscape virtual dims
         const lvw = Math.max(ww, hh);
@@ -270,6 +266,48 @@ export default function Page() {
       vv?.removeEventListener?.("resize", update);
       vv?.removeEventListener?.("scroll", update);
       window.removeEventListener("resize", update);
+    };
+  }, [mini.isMini]);
+
+  // Best-effort: on first user gesture in Mini App, try to go fullscreen + lock to landscape.
+  useEffect(() => {
+    if (!mini.isMini) return;
+
+    let done = false;
+
+    const tryLock = async () => {
+      if (done) return;
+      done = true;
+
+      try {
+        const el: any = document.documentElement;
+        if (el?.requestFullscreen) {
+          await el.requestFullscreen();
+        }
+      } catch {
+        // ignore
+      }
+
+      try {
+        const scr: any = screen as any;
+        await scr?.orientation?.lock?.("landscape");
+      } catch {
+        // ignore
+      }
+    };
+
+    const onFirst = () => {
+      tryLock();
+      window.removeEventListener("pointerdown", onFirst);
+      window.removeEventListener("touchstart", onFirst);
+    };
+
+    window.addEventListener("pointerdown", onFirst, { passive: true });
+    window.addEventListener("touchstart", onFirst, { passive: true });
+
+    return () => {
+      window.removeEventListener("pointerdown", onFirst);
+      window.removeEventListener("touchstart", onFirst);
     };
   }, [mini.isMini]);
 
@@ -386,36 +424,6 @@ export default function Page() {
       setConnectBusy(false);
     }
   };
-
-
-  // Mini App: attempt auto-connect on load (host wallet is usually already connected).
-  useEffect(() => {
-    if (!mini.isMini) return;
-    if (walletAddr) return;
-
-    (async () => {
-      try {
-        // First try silent eth_accounts (no prompt). If not connected, fall back to request.
-        const silent = await tryAutoConnectWallet({ allowMiniApp: true, prefer: "any" });
-        if (silent) {
-          walletRef.current = { provider: silent.provider, address: silent.address };
-          setWalletAddr(silent.address);
-          setWalletSource(labelFromProvider(silent.provider));
-          await refreshBest(silent.address);
-          return;
-        }
-
-        const w = await getOrConnectWallet({ allowMiniApp: true, prefer: "any" });
-        walletRef.current = { provider: w.provider, address: w.address };
-        setWalletAddr(w.address);
-        setWalletSource(labelFromProvider(w.provider));
-        await refreshBest(w.address);
-      } catch {
-        // ignore — user can connect manually from the end screen
-      }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mini.isMini]);
 
   // Web: silently reconnect last-used injected wallet on load via eth_accounts (no popup).
   useEffect(() => {
@@ -628,7 +636,7 @@ export default function Page() {
         </div>
 
         <div className="stage">
-          <div className={"playfield" + (isEnd ? " endActive" : "")}>
+          <div className="playfield">
             <HillClimbCanvas
               ref={(h) => {
                 gameRef.current = h;
@@ -738,6 +746,15 @@ export default function Page() {
                   </div>
 
                   <div className="walletHint">Tip: next time the last-used wallet reconnects silently via eth_accounts.</div>
+            {/* Mini App portrait overlay: UI is rotated to landscape; ask user to rotate their phone. */}
+            {mini.isMini && isPortrait ? (
+              <div className="rotateOverlay" role="status" aria-live="polite">
+                <div className="rotateOverlayCard">
+                  <div className="rotateOverlayTitle">Rotate your phone</div>
+                  <div className="rotateOverlaySub">This game is designed for landscape.</div>
+                </div>
+              </div>
+            ) : null}
                 </div>
               </div>
             ) : null}
@@ -748,7 +765,31 @@ export default function Page() {
             {/* Minimal start hint */}
             {state.status !== "RUN" && !isEnd ? <div className="centerHint">Tap GAS to start</div> : null}
 
+            {/* End screen */}
+            {isEnd ? (
+              <div className="endScreen" style={{ zIndex: 9999 }}>
+                <div className="endCard">
+                  <div className="endTitle">{state.status === "CRASH" ? "CRASH!" : "OUT OF FUEL"}</div>
+                  <div className="endSub">
+                    {fmtM(state.distanceM)}m • best {fmtM(bestOnchainM)}m{beatOnchainBest ? " • NEW BEST (pending onchain)" : ""}
+                  </div>
 
+                  <div className="endShotWrap">
+                    {gameOverShot ? <img className="endShot" src={gameOverShot} alt="Run snapshot" /> : <div className="endShotPlaceholder">Snapshot</div>}
+                  </div>
+
+                  <div className="endOnchain">
+                    <div className="endOnchainTitle">Onchain (optional)</div>
+                    <div className="endOnchainRow">
+                      <div className="endOnchainMeta">
+                        <div className="endOnchainLine">Network: Base mainnet</div>
+                        <div className="endOnchainLine">
+                          Wallet: {walletAddr ? walletAddr : "Not connected"}
+                          {walletAddr && walletSource ? ` (${walletSource})` : ""}
+                        </div>
+                        {!scoreboardAddress || !runNftAddress ? (
+                          <div className="endOnchainWarn">Set contract addresses in .env.local to enable.</div>
+                        ) : null}
                         {scoreTx ? <div className="endOnchainOk">Score tx: {shortHash(scoreTx)}</div> : null}
                         {mintTx ? <div className="endOnchainOk">Mint tx: {shortHash(mintTx)}</div> : null}
                         {actionErr ? <div className="endOnchainErr">{actionErr}</div> : null}
@@ -815,42 +856,9 @@ export default function Page() {
                 onUp={() => boostSet(false)}
               />
             </div>
-            {/* End screen */}
-            {isEnd ? (
-              <div className="endScreen">
-                <div className="endCard">
-                  <div className="endTitle">{state.status === "CRASH" ? "CRASH!" : "OUT OF FUEL"}</div>
-                  <div className="endSub">
-                    {fmtM(state.distanceM)}m • best {fmtM(bestOnchainM)}m{beatOnchainBest ? " • NEW BEST (pending onchain)" : ""}
-                  </div>
-
-                  <div className="endShotWrap">
-                    {gameOverShot ? <img className="endShot" src={gameOverShot} alt="Run snapshot" /> : <div className="endShotPlaceholder">Snapshot</div>}
-                  </div>
-
-                  <div className="endOnchain">
-                    <div className="endOnchainTitle">Onchain (optional)</div>
-                    <div className="endOnchainRow">
-                      <div className="endOnchainMeta">
-                        <div className="endOnchainLine">Network: Base mainnet</div>
-                        <div className="endOnchainLine">
-                          Wallet: {walletAddr ? walletAddr : "Not connected"}
-                          {walletAddr && walletSource ? ` (${walletSource})` : ""}
-                        </div>
-                        {!scoreboardAddress || !runNftAddress ? (
-                          <div className="endOnchainWarn">Set contract addresses in .env.local to enable.</div>
-                        ) : null}
           </div>
         </div>
       </div>
-      {miniVirtualLandscape ? (
-        <div className="rotateOverlay" aria-hidden="true">
-          <div className="rotateOverlayCard">
-            <div className="rotateOverlayTitle">Rotate your phone</div>
-            <div className="rotateOverlaySub">For best play, hold your phone in landscape.</div>
-          </div>
-        </div>
-      ) : null}
     </main>
   );
 }
