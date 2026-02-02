@@ -17,6 +17,19 @@
   --grass:#3dbb5f;
   --hud:#ffffff;
   --shadow:rgba(0,0,0,.35);
+  --header-pad-y:8px;
+  --header-pad-x:12px;
+  --header-gap:8px;
+  --header-title-size:16px;
+  --header-logo:22px;
+  --header-icon-w:40px;
+  --header-icon-h:36px;
+  --header-btn-gap:8px;
+
+  /* Keep end-card above gauges in long layouts */
+  --gauges-bottom:16px;
+  --gauges-size:120px;
+  --end-keepout: calc(var(--gauges-bottom) + var(--gauges-size) + 12px + var(--safe-bottom));
 }
 *{box-sizing:border-box}
 /*
@@ -121,19 +134,20 @@ a{color:inherit}
 /* Prevent any accidental horizontal scrollbars */
 .mainMini{overflow:hidden;}
 .header{
-  padding:14px 16px;
+  padding: var(--header-pad-y) var(--header-pad-x);
   display:flex;
   align-items:center;
   justify-content:space-between;
   gap:12px;
 }
 .headerMini{
-  padding-top: calc(14px + var(--safe-top));
+  padding-top: calc(var(--header-pad-y) + var(--safe-top));
+  padding-bottom: var(--header-pad-y);
 }
 .title{
   font-weight:800;
   letter-spacing:.2px;
-  font-size:20px;
+  font-size: var(--header-title-size);
 }
 .sub{
   font-size:12px;
@@ -484,7 +498,7 @@ canvas{
 .titleRow{
   display:flex;
   align-items:center;
-  gap:12px;
+  gap: var(--header-gap);
 }
 .pillRow{
   display:flex;
@@ -509,7 +523,7 @@ canvas{
 
 .headerBtns{
   display:flex;
-  gap:10px;
+  gap: var(--header-btn-gap);
   align-items:center;
 }
 
@@ -605,11 +619,16 @@ canvas{
   inset:0;
   display:grid;
   place-items:center;
+  padding: 12px 0 var(--end-keepout);
+  box-sizing: border-box;
   background: rgba(245,251,255,.55);
   backdrop-filter: blur(6px);
 }
 .endCard{
   width:min(420px, calc(100% - 24px));
+  max-height: calc(100% - var(--end-keepout) - 24px);
+  overflow: auto;
+  overscroll-behavior: contain;
   background: rgba(255,255,255,.9);
   border: 1px solid rgba(0,0,0,.1);
   border-radius:18px;
@@ -748,8 +767,8 @@ canvas{
 
 
 .brandLogo{
-  width:30px;
-  height:30px;
+  width: var(--header-logo);
+  height: var(--header-logo);
   border-radius:10px;
   border:1px solid rgba(0,0,0,.10);
   background: rgba(255,255,255,.7);
@@ -759,8 +778,8 @@ canvas{
 .iconBtn{
   appearance:none;
   cursor:pointer;
-  width:52px;
-  height:48px;
+  width: var(--header-icon-w);
+  height: var(--header-icon-h);
   border-radius:999px;
   display:inline-flex;
   align-items:center;
@@ -860,7 +879,7 @@ canvas{
 .endOnchainMeta{font-size:12px; font-weight:800; opacity:.85; display:flex; flex-direction:column; gap:4px;}
 .endOnchainLine{line-height:1.25;}
 .endOnchainWarn{color:#9b5d00; opacity:1;}
-.endOnchainErr{color:#9a1a1a; opacity:1;}
+.endOnchainErr{color:#9a1a1a; opacity:1; display:-webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp:3; line-clamp:3; overflow:hidden; text-overflow: ellipsis; word-break: break-word;}
 .endOnchainOk{color:#0a5d2a; opacity:1;}
 .endOnchainBtns{margin-top:10px; display:flex; gap:10px;}
 .endOnchainBtns .actionBtn{flex:1; justify-content:center;}
