@@ -45,34 +45,6 @@ function shortHash(h?: string | null) {
   return `${h.slice(0, 6)}…${h.slice(-4)}`;
 }
 
-function formatActionError(err: unknown, fallback = "Transaction failed") {
-  // viem errors can contain huge debug blocks; show a short, user-safe message.
-  const raw =
-    (err as any)?.shortMessage ??
-    (err as any)?.message ??
-    (err as any)?.cause?.shortMessage ??
-    (err as any)?.cause?.message ??
-    "";
-  const msg = String(raw || fallback);
-
-  // User rejected / denied
-  if (/user rejected|rejected the request|denied|declined|canceled|cancelled/i.test(msg)) {
-    return "Transaction cancelled in your wallet.";
-  }
-
-  // Strip common verbose tails
-  const stripped = msg
-    .split("Request Arguments:")[0]
-    .split("Docs:")[0]
-    .split("MetaMask Tx Signature:")[0]
-    .trim();
-
-  // Clamp to avoid giant UI blocks
-  if (stripped.length > 180) return stripped.slice(0, 177) + "…";
-  return stripped || fallback;
-}
-
-
 function PlusIcon() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -236,8 +208,8 @@ export default function Page() {
         lastW = w;
         lastH = h;
 
-        const ww = Math.ceil(w);
-        const hh = Math.ceil(h);
+        const ww = Math.round(w);
+        const hh = Math.round(h);
 
         // Visual viewport dims
         root.style.setProperty("--vvw", `${ww}px`);
@@ -497,7 +469,7 @@ export default function Page() {
 
       setWalletModalOpen(true);
     } catch (e: any) {
-      setActionErr(formatActionError(e, "Wallet connection failed"));
+      setActionErr(e?.message ? String(e.message) : "Wallet connection failed");
     }
   };
 
@@ -531,7 +503,7 @@ export default function Page() {
       setScoreTx(tx);
       await refreshBest(addr);
     } catch (e: any) {
-      setActionErr(formatActionError(e, "Score submission failed"));
+      setActionErr(e?.message ? String(e.message) : "Score submission failed");
     } finally {
       setScoreBusy(false);
     }
@@ -585,7 +557,7 @@ export default function Page() {
       const tx = await mintRunNft(runNftAddress, meters, driverId, out.tokenUri, w ? { provider: w.provider, address: w.address as any } : undefined);
       setMintTx(tx);
     } catch (e: any) {
-      setActionErr(formatActionError(e, "Mint failed"));
+      setActionErr(e?.message ? String(e.message) : "Mint failed");
     } finally {
       setMintBusy(false);
     }
@@ -735,7 +707,7 @@ export default function Page() {
                         onClick={() => {
                           setWalletModalOpen(false);
                           void ensureConnected({ walletId: w.id, walletLabel: w.name }).catch((e: any) => {
-                            setActionErr(formatActionError(e, "Wallet connection failed"));
+                            setActionErr(e?.message ? String(e.message) : "Wallet connection failed");
                           });
                         }}
                       >
@@ -746,15 +718,6 @@ export default function Page() {
                   </div>
 
                   <div className="walletHint">Tip: next time the last-used wallet reconnects silently via eth_accounts.</div>
-            {/* Mini App portrait overlay: UI is rotated to landscape; ask user to rotate their phone. */}
-            {mini.isMini && isPortrait ? (
-              <div className="rotateOverlay" role="status" aria-live="polite">
-                <div className="rotateOverlayCard">
-                  <div className="rotateOverlayTitle">Rotate your phone</div>
-                  <div className="rotateOverlaySub">This game is designed for landscape.</div>
-                </div>
-              </div>
-            ) : null}
                 </div>
               </div>
             ) : null}
@@ -767,7 +730,7 @@ export default function Page() {
 
             {/* End screen */}
             {isEnd ? (
-              <div className="endScreen" style={{ zIndex: 9999 }}>
+              <div className="endScreen">
                 <div className="endCard">
                   <div className="endTitle">{state.status === "CRASH" ? "CRASH!" : "OUT OF FUEL"}</div>
                   <div className="endSub">
