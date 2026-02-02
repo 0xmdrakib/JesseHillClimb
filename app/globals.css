@@ -17,19 +17,6 @@
   --grass:#3dbb5f;
   --hud:#ffffff;
   --shadow:rgba(0,0,0,.35);
-  --header-pad-y:8px;
-  --header-pad-x:12px;
-  --header-gap:8px;
-  --header-title-size:16px;
-  --header-logo:22px;
-  --header-icon-w:40px;
-  --header-icon-h:36px;
-  --header-btn-gap:8px;
-
-  /* Keep end-card above gauges in long layouts */
-  --gauges-bottom:16px;
-  --gauges-size:120px;
-  --end-keepout: calc(var(--gauges-bottom) + var(--gauges-size) + 12px + var(--safe-bottom));
 }
 *{box-sizing:border-box}
 /*
@@ -134,20 +121,19 @@ a{color:inherit}
 /* Prevent any accidental horizontal scrollbars */
 .mainMini{overflow:hidden;}
 .header{
-  padding: var(--header-pad-y) var(--header-pad-x);
+  padding:14px 16px;
   display:flex;
   align-items:center;
   justify-content:space-between;
   gap:12px;
 }
 .headerMini{
-  padding-top: calc(var(--header-pad-y) + var(--safe-top));
-  padding-bottom: var(--header-pad-y);
+  padding-top: calc(14px + var(--safe-top));
 }
 .title{
   font-weight:800;
   letter-spacing:.2px;
-  font-size: var(--header-title-size);
+  font-size:20px;
 }
 .sub{
   font-size:12px;
@@ -224,6 +210,7 @@ canvas{
   position:absolute;
   top: calc(12px + var(--safe-top));
   left: calc(12px + var(--safe-left));
+  z-index: 20;
   display:flex;
   flex-direction:column;
   align-items:flex-start;
@@ -271,6 +258,7 @@ canvas{
   position:absolute;
   top: calc(12px + var(--safe-top));
   right: calc(12px + var(--safe-right));
+  z-index: 30;
   width:54px;
   height:54px;
   border-radius:999px;
@@ -291,6 +279,7 @@ canvas{
   position:absolute;
   left:0; right:0;
   bottom:12px;
+  z-index: 15;
   display:flex;
   justify-content:space-between;
   padding:0 12px;
@@ -337,6 +326,7 @@ canvas{
 .gauges{
   position:absolute;
   bottom:16px;
+  z-index: 15;
   left:50%;
   transform:translateX(-50%);
   display:flex;
@@ -498,7 +488,7 @@ canvas{
 .titleRow{
   display:flex;
   align-items:center;
-  gap: var(--header-gap);
+  gap:12px;
 }
 .pillRow{
   display:flex;
@@ -523,7 +513,7 @@ canvas{
 
 .headerBtns{
   display:flex;
-  gap: var(--header-btn-gap);
+  gap:10px;
   align-items:center;
 }
 
@@ -604,6 +594,7 @@ canvas{
   left:50%;
   top: calc(12px + var(--safe-top));
   transform: translateX(-50%);
+  z-index: 40;
   background: rgba(10,20,30,.86);
   color:white;
   padding:10px 14px;
@@ -617,24 +608,33 @@ canvas{
 .endScreen{
   position:absolute;
   inset:0;
-  display:grid;
-  place-items:center;
-  padding: 12px 0 var(--end-keepout);
-  box-sizing: border-box;
+  /* Keep end screen ABOVE controls/gauges and usable even when content is long. */
+  z-index: 60;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:
+    calc(16px + var(--safe-top))
+    calc(16px + var(--safe-right))
+    calc(16px + var(--safe-bottom))
+    calc(16px + var(--safe-left));
+  overflow:auto;
+  overscroll-behavior: contain;
   background: rgba(245,251,255,.55);
   backdrop-filter: blur(6px);
 }
 .endCard{
   width:min(420px, calc(100% - 24px));
-  max-height: calc(100% - var(--end-keepout) - 24px);
-  overflow: auto;
-  overscroll-behavior: contain;
   background: rgba(255,255,255,.9);
   border: 1px solid rgba(0,0,0,.1);
   border-radius:18px;
   box-shadow: 0 30px 80px rgba(0,0,0,.18);
   padding:18px 16px;
   text-align:center;
+  /* If the card becomes tall, scroll inside the card instead of going under UI. */
+  max-height: calc(100% - 8px);
+  overflow:auto;
+  -webkit-overflow-scrolling: touch;
 }
 .endTitle{
   font-size:26px;
@@ -694,6 +694,7 @@ canvas{
   position:absolute;
   top: calc(12px + var(--safe-top));
   right: calc(12px + var(--safe-right));
+  z-index: 30;
   height:44px;
   padding:0 12px;
   border-radius:999px;
@@ -767,8 +768,8 @@ canvas{
 
 
 .brandLogo{
-  width: var(--header-logo);
-  height: var(--header-logo);
+  width:30px;
+  height:30px;
   border-radius:10px;
   border:1px solid rgba(0,0,0,.10);
   background: rgba(255,255,255,.7);
@@ -778,8 +779,8 @@ canvas{
 .iconBtn{
   appearance:none;
   cursor:pointer;
-  width: var(--header-icon-w);
-  height: var(--header-icon-h);
+  width:52px;
+  height:48px;
   border-radius:999px;
   display:inline-flex;
   align-items:center;
@@ -876,10 +877,25 @@ canvas{
   opacity:.75;
   margin-bottom:8px;
 }
-.endOnchainMeta{font-size:12px; font-weight:800; opacity:.85; display:flex; flex-direction:column; gap:4px;}
+.endOnchainMeta{font-size:12px; font-weight:800; opacity:.85; display:flex; flex-direction:column; gap:4px; min-width:0; overflow-wrap:anywhere; word-break:break-word;}
 .endOnchainLine{line-height:1.25;}
 .endOnchainWarn{color:#9b5d00; opacity:1;}
-.endOnchainErr{color:#9a1a1a; opacity:1; display:-webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp:3; line-clamp:3; overflow:hidden; text-overflow: ellipsis; word-break: break-word;}
+.endOnchainErr{
+  color:#9a1a1a;
+  opacity:1;
+  /* Clamp very long revert/debug output so it doesn't blow up the end card. */
+  font-size: 11px;
+  line-height: 1.25;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  /* Modern/WebKit multi-line truncation + a fallback max-height. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  max-height: calc(1.25em * 3);
+}
 .endOnchainOk{color:#0a5d2a; opacity:1;}
 .endOnchainBtns{margin-top:10px; display:flex; gap:10px;}
 .endOnchainBtns .actionBtn{flex:1; justify-content:center;}
