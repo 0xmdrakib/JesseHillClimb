@@ -5,18 +5,19 @@ import { HeadPicker } from "@/components/HeadPicker";
 import { loadHead, saveHead, HeadId, HEADS } from "@/lib/heads";
 import { HillClimbCanvas, HillClimbHandle, HillClimbState } from "@/components/HillClimbCanvas";
 import { initMiniApp, composeCast, addMiniApp } from "@/lib/miniapp";
+import { listInjectedWallets, type InjectedWallet } from "@/lib/wallet";
 import {
   getOrConnectWallet,
-  clearCachedWallet,
-  ensureBaseMainnet,
+  tryAutoConnectWallet,
   readBestMeters,
   submitScoreMeters,
   getNextTokenId,
   mintRunNft,
 } from "@/lib/onchain";
 
-// For local browser testing: we'll prefer MetaMask when multiple injected providers exist.
-const DEFAULT_INJECTED_WALLET = "metamask" as const;
+// Browser wallets: don't assume MetaMask. Prefer "any" (EIP-6963 will still pick a sensible default).
+const DEFAULT_INJECTED_WALLET = "any" as const;
+const LAST_WALLET_KEY = "jhc_last_wallet_id_v1";
 
 function clamp01(n: number) {
   return Math.max(0, Math.min(1, n));
@@ -83,16 +84,20 @@ export default function Page() {
   const [mini, setMini] = useState<{ isMini: boolean; fid: number | null }>({ isMini: false, fid: null });
   const [isPortrait, setIsPortrait] = useState(false);
 
-
   const [walletAddr, setWalletAddr] = useState<string | null>(null);
   const [walletSource, setWalletSource] = useState<string>("");
   const [bestOnchainM, setBestOnchainM] = useState<number>(0);
 
   const [scoreBusy, setScoreBusy] = useState(false);
   const [mintBusy, setMintBusy] = useState(false);
+  const [connectBusy, setConnectBusy] = useState(false);
+
   const [scoreTx, setScoreTx] = useState<string | null>(null);
   const [mintTx, setMintTx] = useState<string | null>(null);
   const [actionErr, setActionErr] = useState<string>("");
+
+  const [walletModalOpen, setWalletModalOpen] = useState(false);
+  const [walletChoices, setWalletChoices] = useState<InjectedWallet[]>([]);
 
   const [gameOverShot, setGameOverShot] = useState<string | null>(null);
   const [gameOverMeters, setGameOverMeters] = useState<number>(0);
@@ -119,10 +124,7 @@ export default function Page() {
   const walletRef = useRef<{ provider: any; address: string } | null>(null);
 
   useEffect(() => setHead(loadHead()), []);
-
-  useEffect(() => {
-    saveHead(head);
-  }, [head]);
+  useEffect(() => saveHead(head), [head]);
 
   // Mini App init (non-blocking)
   useEffect(() => {
@@ -132,21 +134,19 @@ export default function Page() {
     })();
   }, []);
 
-  // Orientation detection (used for Mini App portrait layout)
+  // Orientation detection (used for Mini App virtual landscape)
   useEffect(() => {
     if (typeof window === "undefined") return;
 
     const vv = (window as any).visualViewport as VisualViewport | undefined;
 
-    // "orientation: portrait" can flap inside embedded webviews (address bar/keyboard).
-    // Use a ratio-based check with hysteresis to avoid UI blinking.
+    // Ratio-based check with hysteresis to avoid UI blinking.
     let last: boolean | null = null;
 
     const compute = () => {
       const w = vv?.width ?? window.innerWidth;
       const h = vv?.height ?? window.innerHeight;
 
-      // Hysteresis: only flip when we're clearly portrait/landscape.
       const next =
         h > w * 1.08 ? true :
         w > h * 1.08 ? false :
@@ -179,10 +179,14 @@ export default function Page() {
   useEffect(() => {
     if (!mini.isMini) return;
     document.body.classList.add("miniBody");
-    return () => document.body.classList.remove("miniBody");
+    document.documentElement.classList.add("miniHtml");
+    return () => {
+      document.body.classList.remove("miniBody");
+      document.documentElement.classList.remove("miniHtml");
+    };
   }, [mini.isMini]);
 
-  // Mini App sizing helpers
+  // Mini App sizing helpers (visualViewport-driven, also computes "landscape" swapped dims)
   useEffect(() => {
     if (!mini.isMini) return;
 
@@ -204,12 +208,22 @@ export default function Page() {
         lastW = w;
         lastH = h;
 
-        root.style.setProperty("--vvw", `${Math.round(w)}px`);
-        root.style.setProperty("--vvh", `${Math.round(h)}px`);
+        const ww = Math.round(w);
+        const hh = Math.round(h);
 
-        // UI scale: keep HUD/controls proportional on narrow screens.
-        const short = Math.min(w, h);
-        const uiScale = Math.max(0.72, Math.min(1, short / 520));
+        // Visual viewport dims
+        root.style.setProperty("--vvw", `${ww}px`);
+        root.style.setProperty("--vvh", `${hh}px`);
+
+        // Landscape virtual dims
+        const lvw = Math.max(ww, hh);
+        const lvh = Math.min(ww, hh);
+        root.style.setProperty("--lvw", `${lvw}px`);
+        root.style.setProperty("--lvh", `${lvh}px`);
+
+        // UI scale: height is the limiting factor in landscape layouts.
+        const short = lvh;
+        const uiScale = Math.max(0.68, Math.min(1, short / 420));
         root.style.setProperty("--mini-ui-scale", uiScale.toFixed(3));
       });
     };
@@ -228,7 +242,6 @@ export default function Page() {
   }, [mini.isMini]);
 
   // Best-effort: on first user gesture in Mini App, try to go fullscreen + lock to landscape.
-  // (Many mobile browsers require fullscreen + user gesture for orientation lock.)
   useEffect(() => {
     if (!mini.isMini) return;
 
@@ -248,11 +261,10 @@ export default function Page() {
       }
 
       try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const scr: any = screen as any;
         await scr?.orientation?.lock?.("landscape");
       } catch {
-        // ignore (not supported / blocked)
+        // ignore
       }
     };
 
@@ -271,7 +283,7 @@ export default function Page() {
     };
   }, [mini.isMini]);
 
-  const miniPortrait = mini.isMini && isPortrait;
+  const miniVirtualLandscape = mini.isMini && isPortrait;
 
   // Pause automatically when the app is backgrounded.
   useEffect(() => {
@@ -280,11 +292,11 @@ export default function Page() {
     return () => document.removeEventListener("visibilitychange", onVis);
   }, []);
 
-  // Pause while driver picker is open.
+  // Pause while driver picker or wallet picker is open.
   useEffect(() => {
-    if (driverOpen) setPaused(true);
+    if (driverOpen || walletModalOpen) setPaused(true);
     else if (!document.hidden) setPaused(false);
-  }, [driverOpen]);
+  }, [driverOpen, walletModalOpen]);
 
   // Keyboard fallback (desktop): ArrowRight = GAS, ArrowLeft = BRAKE, R = reset
   useEffect(() => {
@@ -339,27 +351,126 @@ export default function Page() {
     setBestOnchainM(Number.isFinite(bestNum) ? bestNum : 0);
   };
 
-  const ensureConnected = async () => {
+  const labelFromProvider = (provider: any) => {
+    if (provider?.isMetaMask) return "MetaMask";
+    if (provider?.isCoinbaseWallet) return "Coinbase Wallet";
+    return "Injected wallet";
+  };
+
+  const ensureConnected = async (opts?: { walletId?: string; walletLabel?: string }) => {
     setActionErr("");
-    const preferInjected = mini.isMini ? undefined : { allowMiniApp: false, prefer: DEFAULT_INJECTED_WALLET };
-    const { provider, address } = await getOrConnectWallet(preferInjected);
-    await ensureBaseMainnet(provider);
-    setWalletAddr(address);
-    walletRef.current = { provider, address };
+    setConnectBusy(true);
+    try {
+      let walletId = opts?.walletId;
+      if (!mini.isMini && !walletId) {
+        try {
+          walletId = localStorage.getItem(LAST_WALLET_KEY) || undefined;
+        } catch {
+          // ignore
+        }
+      }
 
-    // Human-friendly provider label for debugging.
-    const anyP: any = provider as any;
-    const src = mini.isMini
-      ? "Mini App wallet"
-      : anyP?.isMetaMask
-        ? "MetaMask"
-        : anyP?.isCoinbaseWallet
-          ? "Coinbase Wallet"
-          : "Injected wallet";
-    setWalletSource(src);
+      const preferInjected = mini.isMini
+        ? undefined
+        : { allowMiniApp: false, prefer: DEFAULT_INJECTED_WALLET, walletId };
 
-    await refreshBest(address);
-    return address;
+      const { provider, address } = await getOrConnectWallet(preferInjected);
+      setWalletAddr(address);
+      walletRef.current = { provider, address };
+
+      const src = mini.isMini ? "Mini App wallet" : (opts?.walletLabel ?? labelFromProvider(provider));
+      setWalletSource(src);
+
+      // Persist last-used injected wallet id for silent reconnect (web only).
+      if (!mini.isMini && walletId) {
+        try {
+          localStorage.setItem(LAST_WALLET_KEY, walletId);
+        } catch {
+          // ignore
+        }
+      }
+
+      await refreshBest(address);
+      return address;
+    } finally {
+      setConnectBusy(false);
+    }
+  };
+
+  // Web: silently reconnect last-used injected wallet on load via eth_accounts (no popup).
+  useEffect(() => {
+    if (mini.isMini) return;
+    let lastId: string | null = null;
+    try {
+      lastId = localStorage.getItem(LAST_WALLET_KEY);
+    } catch {
+      lastId = null;
+    }
+    if (!lastId) return;
+
+    (async () => {
+      try {
+        const w = await tryAutoConnectWallet({ allowMiniApp: false, walletId: lastId, prefer: "any" });
+        if (!w) return;
+        walletRef.current = { provider: w.provider, address: w.address };
+        setWalletAddr(w.address);
+        setWalletSource(labelFromProvider(w.provider));
+        await refreshBest(w.address);
+      } catch {
+        // ignore
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mini.isMini, scoreboardAddress]);
+
+  // Mini Apps: auto-connect (host provider). If the host already has an account, this is silent;
+  // otherwise the host can prompt the user (expected for Mini Apps).
+  useEffect(() => {
+    if (!mini.isMini) return;
+    (async () => {
+      try {
+        const w = await getOrConnectWallet();
+        walletRef.current = { provider: w.provider, address: w.address };
+        setWalletAddr(w.address);
+        setWalletSource("Mini App wallet");
+        await refreshBest(w.address);
+      } catch {
+        // ignore
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mini.isMini, scoreboardAddress]);
+
+  const loadWalletChoices = async () => {
+    const ws = await listInjectedWallets(800);
+    setWalletChoices(ws);
+    return ws;
+  };
+
+  const onConnectWalletClick = async () => {
+    try {
+      setActionErr("");
+      if (mini.isMini) {
+        await ensureConnected();
+        return;
+      }
+
+      const ws = await loadWalletChoices();
+      if (!ws.length) {
+        setActionErr("No injected wallet found. Install a browser wallet extension.");
+        return;
+      }
+
+      // If only one wallet exists, connect immediately.
+      if (ws.length === 1) {
+        await ensureConnected({ walletId: ws[0]!.id, walletLabel: ws[0]!.name });
+        return;
+      }
+
+      setWalletModalOpen(true);
+    } catch (e: any) {
+      setActionErr(e?.message ? String(e.message) : "Wallet connection failed");
+    }
   };
 
   const onTryAgain = () => {
@@ -371,9 +482,6 @@ export default function Page() {
     setScoreTx(null);
     setMintTx(null);
     setActionErr("");
-    // Optional: clear cached wallet to re-test connect flows.
-    // (Does not affect Mini App wallets.)
-    if (!mini.isMini) clearCachedWallet();
     gameRef.current?.reset();
   };
 
@@ -416,8 +524,7 @@ export default function Page() {
       }
 
       setMintBusy(true);
-      const addr = walletAddr ?? (await ensureConnected());
-      void addr;
+      void (walletAddr ?? (await ensureConnected()));
 
       const meters = Math.max(0, Math.floor(gameOverMeters || state.distanceM));
       const driverId = head === "jesse" ? 0 : 1;
@@ -461,11 +568,7 @@ export default function Page() {
 
   const throttleSet = (t: number) => gameRef.current?.setThrottle(t);
 
-  const onGasDown = () => {
-    throttleSet(1);
-    throttleSet(1);
-  };
-
+  const onGasDown = () => throttleSet(1);
   const onBrakeDown = () => throttleSet(-1);
   const boostSet = (on: boolean) => {
     setBoostHeld(on);
@@ -474,15 +577,16 @@ export default function Page() {
 
   const beatOnchainBest = isEnd && Math.floor(state.distanceM) > Math.floor(bestOnchainM);
 
-  const mainClassName = `main${mini.isMini ? " mainMini" : ""}`;
-  const shellClassName = `shell${mini.isMini ? " shellMini" : ""}${miniPortrait ? " miniPortrait" : ""}`;
-  const headerClassName = `header${mini.isMini ? " headerMini" : ""}`;
-  const stageClassName = `stage${miniPortrait ? " stagePortrait" : ""}`;
-
   return (
-    <main className={mainClassName}> 
-      <div className={shellClassName}> 
-        <div className={headerClassName}> 
+    <main className={"main " + (mini.isMini ? "mainMini" : "")}>
+      <div
+        className={
+          "shell " +
+          (mini.isMini ? "shellMini" : "") +
+          (miniVirtualLandscape ? " miniVirtualLandscape" : "")
+        }
+      >
+        <div className={"header " + (mini.isMini ? "headerMini" : "")}>
           <div>
             <div className="titleRow">
               <img className="brandLogo" src="/icon.png" alt="" />
@@ -503,192 +607,218 @@ export default function Page() {
           </div>
         </div>
 
-        <div className={stageClassName}>
+        <div className="stage">
           <div className="playfield">
-          <HillClimbCanvas
-	          // NOTE: ref callbacks must return void (React's LegacyRef expects void).
-	          // Using a block body avoids returning the assigned value.
-	          ref={(h) => {
-	            gameRef.current = h;
-	          }}
-            headId={head}
-            paused={paused}
-            seed={seed}
-            bestM={bestOnchainM}
-            onState={setState}
-            onGameOver={(p) => {
-              setGameOverShot(p.snapshotDataUrl);
-              setGameOverMeters(p.meters);
-            }}
-          />
+            <HillClimbCanvas
+              ref={(h) => {
+                gameRef.current = h;
+              }}
+              headId={head}
+              paused={paused}
+              seed={seed}
+              bestM={bestOnchainM}
+              onState={setState}
+              onGameOver={(p) => {
+                setGameOverShot(p.snapshotDataUrl);
+                setGameOverMeters(p.meters);
+              }}
+            />
 
-          {/* HUD */}
-          <div className="hud">
-            <div className="hudCard">
-              <div className="hudTop">
-                <div className="bigNum">{fmtM(state.distanceM)}m</div>
-                <div className="small">best {fmtM(bestOnchainM)}m</div>
-              </div>
+            {/* HUD */}
+            <div className="hud">
+              <div className="hudCard">
+                <div className="hudTop">
+                  <div className="bigNum">{fmtM(state.distanceM)}m</div>
+                  <div className="small">best {fmtM(bestOnchainM)}m</div>
+                </div>
 
-              <div className={"fuelBar " + (state.fuel < 18 ? "fuelLow" : "")}> 
-                <div className="fuelFill" style={{ width: `${fuel01 * 100}%` }} />
-              </div>
+                <div className={"fuelBar " + (state.fuel < 18 ? "fuelLow" : "")}>
+                  <div className="fuelFill" style={{ width: `${fuel01 * 100}%` }} />
+                </div>
 
-              <div className="hudRow">
-                <div className="tag">⛽ {Math.floor(state.fuel)}%</div>
-                <div className="tag">🪙 {state.coins}</div>
-                <div className="tag">⚡ {fmtKmh(state.speedKmh)} km/h</div>
-              </div>
-
-              {state.flips > 0 || state.airtimeS > 0.2 ? (
                 <div className="hudRow">
-                  <div className="tag">🌀 {state.flips}</div>
-                  <div className="tag">🕊 {state.airtimeS.toFixed(1)}s</div>
+                  <div className="tag">⛽ {Math.floor(state.fuel)}%</div>
+                  <div className="tag">🪙 {state.coins}</div>
+                  <div className="tag">⚡ {fmtKmh(state.speedKmh)} km/h</div>
                 </div>
-              ) : null}
-            </div>
-          </div>
 
-          {/* Driver button in the stage (top-right) */}
-          <button
-            type="button"
-            className="driverBtn"
-            onClick={() => setDriverOpen((o) => !o)}
-            aria-label="Driver"
-            title="Driver"
-          >
-            <img className="driverIcon" src={HEADS[head].src} alt="" />
-            <span className="driverLabel">{HEADS[head].label}</span>
-            <span className="driverChevron" aria-hidden="true">
-              <ChevronDownIcon />
-            </span>
-          </button>
-
-          {driverOpen ? (
-            <div className="driverBackdrop" onClick={() => setDriverOpen(false)} role="presentation">
-              <div className="driverCard" onClick={(e) => e.stopPropagation()}>
-                <div className="driverCardTop">
-                  <div className="driverTitle">Driver</div>
-                  <button type="button" className="driverClose" onClick={() => setDriverOpen(false)}>
-                    ✕
-                  </button>
-                </div>
-                <HeadPicker
-                  value={head}
-                  onChange={(h) => {
-                    setHead(h);
-                    setDriverOpen(false);
-                  }}
-                />
+                {state.flips > 0 || state.airtimeS > 0.2 ? (
+                  <div className="hudRow">
+                    <div className="tag">🌀 {state.flips}</div>
+                    <div className="tag">🕊 {state.airtimeS.toFixed(1)}s</div>
+                  </div>
+                ) : null}
               </div>
             </div>
-          ) : null}
 
-          {/* Toast */}
-          {state.toastT > 0 && state.toast ? <div className="toast">{state.toast}</div> : null}
+            {/* Driver button (top-right) */}
+            <button
+              type="button"
+              className="driverBtn"
+              onClick={() => setDriverOpen((o) => !o)}
+              aria-label="Driver"
+              title="Driver"
+            >
+              <img className="driverIcon" src={HEADS[head].src} alt="" />
+              <span className="driverLabel">{HEADS[head].label}</span>
+              <span className="driverChevron" aria-hidden="true">
+                <ChevronDownIcon />
+              </span>
+            </button>
 
-          {/* Minimal start hint */}
-          {state.status !== "RUN" && !isEnd ? <div className="centerHint">Tap GAS to start</div> : null}
-
-
-          {/* Mini App portrait: wide-mode + optional landscape button */}
-
-
-          {/* End screen */}
-          {isEnd ? (
-            <div className="endScreen">
-              <div className="endCard">
-                <div className="endTitle">{state.status === "CRASH" ? "CRASH!" : "OUT OF FUEL"}</div>
-                <div className="endSub">
-                  {fmtM(state.distanceM)}m • best {fmtM(bestOnchainM)}m{beatOnchainBest ? " • NEW BEST (pending onchain)" : ""}
+            {driverOpen ? (
+              <div className="driverBackdrop" onClick={() => setDriverOpen(false)} role="presentation">
+                <div className="driverCard" onClick={(e) => e.stopPropagation()}>
+                  <div className="driverCardTop">
+                    <div className="driverTitle">Driver</div>
+                    <button type="button" className="driverClose" onClick={() => setDriverOpen(false)}>
+                      ✕
+                    </button>
+                  </div>
+                  <HeadPicker
+                    value={head}
+                    onChange={(h) => {
+                      setHead(h);
+                      setDriverOpen(false);
+                    }}
+                  />
                 </div>
+              </div>
+            ) : null}
 
-                <div className="endShotWrap">
-                  {gameOverShot ? <img className="endShot" src={gameOverShot} alt="Run snapshot" /> : <div className="endShotPlaceholder">Snapshot</div>}
-                </div>
-
-                <div className="endOnchain">
-                  <div className="endOnchainTitle">Onchain (optional)</div>
-                  <div className="endOnchainRow">
-                    <div className="endOnchainMeta">
-                      <div className="endOnchainLine">Network: Base mainnet</div>
-                      <div className="endOnchainLine">
-                        Wallet: {walletAddr ? walletAddr : "Not connected"}
-                        {walletAddr && walletSource ? ` (${walletSource})` : ""}
-                      </div>
-                      {!scoreboardAddress || !runNftAddress ? (
-                        <div className="endOnchainWarn">Set contract addresses in .env.local to enable.</div>
-                      ) : null}
-                      {scoreTx ? <div className="endOnchainOk">Score tx: {shortHash(scoreTx)}</div> : null}
-                      {mintTx ? <div className="endOnchainOk">Mint tx: {shortHash(mintTx)}</div> : null}
-                      {actionErr ? <div className="endOnchainErr">{actionErr}</div> : null}
-                    </div>
+            {/* Wallet picker (web only) */}
+            {!mini.isMini && walletModalOpen ? (
+              <div className="walletModal" onClick={() => setWalletModalOpen(false)} role="presentation">
+                <div className="walletCard" onClick={(e) => e.stopPropagation()}>
+                  <div className="walletCardTop">
+                    <div className="walletTitle">Choose wallet</div>
+                    <button type="button" className="driverClose" onClick={() => setWalletModalOpen(false)} aria-label="Close">
+                      ✕
+                    </button>
                   </div>
 
-                  <div className="endOnchainBtns">
-                    {!walletAddr ? (
+                  <div className="walletList">
+                    {walletChoices.map((w) => (
                       <button
+                        key={w.id}
                         type="button"
-                        className="actionBtn btnDark"
-                        disabled={scoreBusy || mintBusy}
+                        className="walletRow"
+                        disabled={connectBusy}
                         onClick={() => {
-                          void ensureConnected().catch((e: any) => {
+                          setWalletModalOpen(false);
+                          void ensureConnected({ walletId: w.id, walletLabel: w.name }).catch((e: any) => {
                             setActionErr(e?.message ? String(e.message) : "Wallet connection failed");
                           });
                         }}
                       >
-                        Connect wallet (MetaMask)
+                        {w.icon ? <img className="walletIcon" src={w.icon} alt="" /> : <span className="walletIcon" aria-hidden="true" />}
+                        <span>{w.name}</span>
                       </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      className="actionBtn btnDark"
-                      disabled={scoreBusy || mintBusy || !scoreboardAddress}
-                      onClick={onSubmitScore}
-                    >
-                      {scoreBusy ? "Submitting…" : "Save score onchain"}
+                    ))}
+                  </div>
+
+                  <div className="walletHint">Tip: next time the last-used wallet reconnects silently via eth_accounts.</div>
+                </div>
+              </div>
+            ) : null}
+
+            {/* Toast */}
+            {state.toastT > 0 && state.toast ? <div className="toast">{state.toast}</div> : null}
+
+            {/* Minimal start hint */}
+            {state.status !== "RUN" && !isEnd ? <div className="centerHint">Tap GAS to start</div> : null}
+
+            {/* End screen */}
+            {isEnd ? (
+              <div className="endScreen">
+                <div className="endCard">
+                  <div className="endTitle">{state.status === "CRASH" ? "CRASH!" : "OUT OF FUEL"}</div>
+                  <div className="endSub">
+                    {fmtM(state.distanceM)}m • best {fmtM(bestOnchainM)}m{beatOnchainBest ? " • NEW BEST (pending onchain)" : ""}
+                  </div>
+
+                  <div className="endShotWrap">
+                    {gameOverShot ? <img className="endShot" src={gameOverShot} alt="Run snapshot" /> : <div className="endShotPlaceholder">Snapshot</div>}
+                  </div>
+
+                  <div className="endOnchain">
+                    <div className="endOnchainTitle">Onchain (optional)</div>
+                    <div className="endOnchainRow">
+                      <div className="endOnchainMeta">
+                        <div className="endOnchainLine">Network: Base mainnet</div>
+                        <div className="endOnchainLine">
+                          Wallet: {walletAddr ? walletAddr : "Not connected"}
+                          {walletAddr && walletSource ? ` (${walletSource})` : ""}
+                        </div>
+                        {!scoreboardAddress || !runNftAddress ? (
+                          <div className="endOnchainWarn">Set contract addresses in .env.local to enable.</div>
+                        ) : null}
+                        {scoreTx ? <div className="endOnchainOk">Score tx: {shortHash(scoreTx)}</div> : null}
+                        {mintTx ? <div className="endOnchainOk">Mint tx: {shortHash(mintTx)}</div> : null}
+                        {actionErr ? <div className="endOnchainErr">{actionErr}</div> : null}
+                      </div>
+                    </div>
+
+                    <div className="endOnchainBtns">
+                      {!walletAddr ? (
+                        <button
+                          type="button"
+                          className="actionBtn btnDark"
+                          disabled={scoreBusy || mintBusy || connectBusy}
+                          onClick={() => void onConnectWalletClick()}
+                        >
+                          {connectBusy ? "Connecting…" : "Connect wallet"}
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        className="actionBtn btnDark"
+                        disabled={scoreBusy || mintBusy || !scoreboardAddress || connectBusy}
+                        onClick={onSubmitScore}
+                      >
+                        {scoreBusy ? "Submitting…" : "Save score onchain"}
+                      </button>
+                      <button
+                        type="button"
+                        className="actionBtn btnDark"
+                        disabled={scoreBusy || mintBusy || !runNftAddress || !gameOverShot || connectBusy}
+                        onClick={onMintNft}
+                      >
+                        {mintBusy ? "Minting…" : "Mint run NFT"}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="endBtns">
+                    <button type="button" className="actionBtn btnPrimary" onClick={onTryAgain}>
+                      Try again
                     </button>
-                    <button
-                      type="button"
-                      className="actionBtn btnDark"
-                      disabled={scoreBusy || mintBusy || !runNftAddress || !gameOverShot}
-                      onClick={onMintNft}
-                    >
-                      {mintBusy ? "Minting…" : "Mint run NFT"}
+                    <button type="button" className="actionBtn btnDark" onClick={doShare}>
+                      Share
                     </button>
                   </div>
                 </div>
-
-                <div className="endBtns">
-                  <button type="button" className="actionBtn btnPrimary" onClick={onTryAgain}>
-                    Try again
-                  </button>
-                  <button type="button" className="actionBtn btnDark" onClick={doShare}>
-                    Share
-                  </button>
-                </div>
               </div>
+            ) : null}
+
+            {/* Controls */}
+            <div className="controls">
+              <Pedal label="BRAKE" side="left" onDown={onBrakeDown} onUp={() => throttleSet(0)} />
+              <Pedal label="GAS" side="right" onDown={onGasDown} onUp={() => throttleSet(0)} />
             </div>
-          ) : null}
 
-          {/* Controls */}
-          <div className="controls">
-            <Pedal label="BRAKE" side="left" onDown={onBrakeDown} onUp={() => throttleSet(0)} />
-            <Pedal label="GAS" side="right" onDown={onGasDown} onUp={() => throttleSet(0)} />
-          </div>
-
-          {/* Gauges (RPM + BOOST) */}
-          <div className="gauges">
-            <Gauge label="RPM" value01={clamp01(state.rpm01)} />
-            <GaugeButton
-              label="BOOST"
-              value01={clamp01(state.boost01)}
-              active={boostHeld}
-              disabled={state.status !== "RUN" || state.boost01 < 0.05}
-              onDown={() => boostSet(true)}
-              onUp={() => boostSet(false)}
-            />
-          </div>
+            {/* Gauges (RPM + BOOST) */}
+            <div className="gauges">
+              <Gauge label="RPM" value01={clamp01(state.rpm01)} />
+              <GaugeButton
+                label="BOOST"
+                value01={clamp01(state.boost01)}
+                active={boostHeld}
+                disabled={state.status !== "RUN" || state.boost01 < 0.05}
+                onDown={() => boostSet(true)}
+                onUp={() => boostSet(false)}
+              />
+            </div>
           </div>
         </div>
       </div>
