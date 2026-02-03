@@ -1380,7 +1380,18 @@ function drawHills(
   const freq = 0.08 + 0.06 * parallax;
   ctx.moveTo(0, h);
 
-  for (let sx = 0; sx <= w; sx += 18 * dpr) {
+  // Ensure the ridge reaches the very right edge.
+  // Without an explicit sample at x=w, the final segment can drop straight to (w, h)
+  // leaving a visible "cut" wedge on some viewport sizes.
+  const step = 18 * dpr;
+  for (let sx = 0; sx < w; sx += step) {
+    const worldX = (camX * parallax) + ((sx - w * 0.5) / (SCALE * dpr)) * 0.9;
+    const n = ridgeNoise((worldX + 1200 * parallax) * freq);
+    const y = baseY - n * ampPx;
+    ctx.lineTo(sx, y);
+  }
+  {
+    const sx = w;
     const worldX = (camX * parallax) + ((sx - w * 0.5) / (SCALE * dpr)) * 0.9;
     const n = ridgeNoise((worldX + 1200 * parallax) * freq);
     const y = baseY - n * ampPx;
@@ -1472,7 +1483,17 @@ function drawMountains(
   ctx.moveTo(0, h);
 
   // Deterministic peaks + parallax camera drift.
-  for (let sx = 0; sx <= w; sx += 24 * dpr) {
+  // Ensure the ridge reaches the very right edge (avoids a visible wedge cut-off).
+  const step = 24 * dpr;
+  for (let sx = 0; sx < w; sx += step) {
+    const worldX = (camX * parallax) + ((sx - w * 0.5) / (SCALE * dpr)) * 0.85;
+    const t = worldX * (0.09 + parallax * 0.03);
+    const peak = ridgeNoise(t);
+    const y = baseY - (52 + peak * 78) * dpr * (0.68 + parallax * 1.35);
+    ctx.lineTo(sx, y);
+  }
+  {
+    const sx = w;
     const worldX = (camX * parallax) + ((sx - w * 0.5) / (SCALE * dpr)) * 0.85;
     const t = worldX * (0.09 + parallax * 0.03);
     const peak = ridgeNoise(t);
