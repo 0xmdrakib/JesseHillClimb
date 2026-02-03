@@ -130,6 +130,12 @@ a{color:inherit}
 .headerMini{
   padding-top: calc(14px + var(--safe-top));
 }
+
+/* Remove the top header bar entirely (no UI + no reserved space). */
+.header,
+.headerMini{
+  display:none !important;
+}
 .title{
   font-weight:800;
   letter-spacing:.2px;
@@ -165,7 +171,7 @@ a{color:inherit}
   position:relative;
   height: min(640px, 70vh);
   background: var(--sky);
-  border-top:1px solid rgba(0,0,0,.08);
+  border-top:0;
   touch-action: none;
 }
 
@@ -194,7 +200,7 @@ a{color:inherit}
 .stagePortrait canvas{ height: 100%; }
 .shellMini .stage{
   /* Mini Apps: fill the usable viewport; dvh behaves better with mobile browser UI */
-  height: calc(100dvh - 74px - var(--safe-top));
+  height: 100dvh;
 }
 canvas{
   width:100%;
