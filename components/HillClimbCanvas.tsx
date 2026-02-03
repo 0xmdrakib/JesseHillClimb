@@ -1428,7 +1428,18 @@ function drawForest(
   // Ridge fill
   ctx.beginPath();
   ctx.moveTo(0, h);
+  let lastSx = 0;
   for (let sx = 0; sx <= w; sx += 18 * dpr) {
+    lastSx = sx;
+    const worldX = (camX * parallax) + ((sx - w * 0.5) / (SCALE * dpr)) * 0.85;
+    const n = ridgeNoise((worldX + 999) * freq);
+    const y = baseY - n * amp;
+    ctx.lineTo(sx, y);
+  }
+  // Ensure the ridge reaches the right edge to avoid a visible "cut wedge"
+  // when the step size doesn't land exactly on w.
+  if (lastSx < w) {
+    const sx = w;
     const worldX = (camX * parallax) + ((sx - w * 0.5) / (SCALE * dpr)) * 0.85;
     const n = ridgeNoise((worldX + 999) * freq);
     const y = baseY - n * amp;
