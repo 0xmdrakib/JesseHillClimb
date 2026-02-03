@@ -1536,7 +1536,15 @@ function drawGround(ctx: CanvasRenderingContext2D, w: number, h: number, track: 
   ctx.fillStyle = dirtGrad;
   ctx.beginPath();
   ctx.moveTo(0, h);
+  let lastSx = 0;
   for (let sx = 0; sx <= w; sx += 4 * dpr) {
+    lastSx = sx;
+    const xWorld = camX + (sx - viewCX) / (SCALE * dpr);
+    ctx.lineTo(sx, screenYOfGround(xWorld));
+  }
+  // Ensure the fill reaches the right edge even when w is not a multiple of the step
+  if (lastSx < w) {
+    const sx = w;
     const xWorld = camX + (sx - viewCX) / (SCALE * dpr);
     ctx.lineTo(sx, screenYOfGround(xWorld));
   }
@@ -1549,11 +1557,19 @@ function drawGround(ctx: CanvasRenderingContext2D, w: number, h: number, track: 
   ctx.lineWidth = 22 * dpr;
   ctx.lineCap = "round";
   ctx.beginPath();
+  let lastSx2 = 0;
   for (let sx = 0; sx <= w; sx += 6 * dpr) {
+    lastSx2 = sx;
     const xWorld = camX + (sx - viewCX) / (SCALE * dpr);
     const y = screenYOfGround(xWorld) + 4 * dpr;
     if (sx === 0) ctx.moveTo(sx, y);
     else ctx.lineTo(sx, y);
+  }
+  if (lastSx2 < w) {
+    const sx = w;
+    const xWorld = camX + (sx - viewCX) / (SCALE * dpr);
+    const y = screenYOfGround(xWorld) + 4 * dpr;
+    ctx.lineTo(sx, y);
   }
   ctx.stroke();
 
@@ -1585,22 +1601,38 @@ function drawGround(ctx: CanvasRenderingContext2D, w: number, h: number, track: 
   ctx.lineWidth = 11 * dpr;
   ctx.lineCap = "round";
   ctx.beginPath();
+  let lastSx3 = 0;
   for (let sx = 0; sx <= w; sx += 5 * dpr) {
+    lastSx3 = sx;
     const xWorld = camX + (sx - viewCX) / (SCALE * dpr);
     const y = screenYOfGround(xWorld);
     if (sx === 0) ctx.moveTo(sx, y);
     else ctx.lineTo(sx, y);
+  }
+  if (lastSx3 < w) {
+    const sx = w;
+    const xWorld = camX + (sx - viewCX) / (SCALE * dpr);
+    const y = screenYOfGround(xWorld);
+    ctx.lineTo(sx, y);
   }
   ctx.stroke();
 
   ctx.strokeStyle = "rgba(255,255,255,0.38)";
   ctx.lineWidth = 3.5 * dpr;
   ctx.beginPath();
+  let lastSx4 = 0;
   for (let sx = 0; sx <= w; sx += 5 * dpr) {
+    lastSx4 = sx;
     const xWorld = camX + (sx - viewCX) / (SCALE * dpr);
     const y = screenYOfGround(xWorld) - 3.5 * dpr;
     if (sx === 0) ctx.moveTo(sx, y);
     else ctx.lineTo(sx, y);
+  }
+  if (lastSx4 < w) {
+    const sx = w;
+    const xWorld = camX + (sx - viewCX) / (SCALE * dpr);
+    const y = screenYOfGround(xWorld) - 3.5 * dpr;
+    ctx.lineTo(sx, y);
   }
   ctx.stroke();
 
