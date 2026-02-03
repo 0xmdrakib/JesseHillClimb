@@ -87,11 +87,12 @@ a{color:inherit}
    IMPORTANT: do NOT scale the container; scale only UI pieces (HUD/controls) and the render scale. */
 .shellMini.miniVirtualLandscape{
   position: fixed;
-  left: 0;
-  top: var(--vvh);         /* matches the CSS-tricks rotate technique */
+  /* Flip rotation direction so landscape opens to the LEFT in Mini App portrait webviews. */
+  left: var(--vvw);
+  top: 0;
   width: var(--lvw);       /* portrait height -> landscape width */
   height: var(--lvh);      /* portrait width  -> landscape height */
-  transform: rotate(-90deg);
+  transform: rotate(90deg);
   transform-origin: left top;
   min-height: 0;
   display: flex;
