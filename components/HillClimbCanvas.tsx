@@ -270,18 +270,24 @@ export const HillClimbCanvas = forwardRef<
   {
     headId: HeadId;
     paused: boolean;
+    /** True only when running inside a Farcaster/Base Mini App host. */
+    miniMode?: boolean;
     seed?: number;
     onState: (s: HillClimbState) => void;
     bestM?: number;
     onGameOver?: (p: { snapshotDataUrl: string | null; meters: number; status: "CRASH" | "OUT_OF_FUEL" }) => void;
   }
 >(function HillClimbCanvas(props, ref) {
-  const { headId, paused, seed, onState, bestM, onGameOver } = props;
+  const { headId, paused, miniMode, seed, onState, bestM, onGameOver } = props;
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const pausedRef = useRef(paused);
   const headIdRef = useRef(headId);
+
+  // Mini mode can flip from false->true shortly after mount (once the SDK initializes).
+  // The RAF loop captures closures on mount, so keep a ref for runtime checks.
+  const miniModeRef = useRef(Boolean(miniMode));
 
   const throttleTargetRef = useRef(0); // what the user is doing right now
   const throttleRef = useRef(0); // smoothed (game feel)
@@ -339,6 +345,10 @@ export const HillClimbCanvas = forwardRef<
   useEffect(() => {
     pausedRef.current = paused;
   }, [paused]);
+
+  useEffect(() => {
+    miniModeRef.current = Boolean(miniMode);
+  }, [miniMode]);
 
   useEffect(() => {
     // New seed => fresh terrain/run
@@ -1138,7 +1148,12 @@ export const HillClimbCanvas = forwardRef<
     const v = car.chassis.getLinearVelocity();
 
     // look-ahead (HCR camera looks forward)
-    const lookAhead = Math.max(0, Math.min(8, v.x * 0.6));
+    // In Mini Apps we bias the camera a bit more forward to feel "ultra wide"
+    // (more upcoming terrain visible) without changing gameplay scale.
+    const isMini = miniModeRef.current;
+    const lookMul = isMini ? 0.78 : 0.6;
+    const lookMax = isMini ? 10 : 8;
+    const lookAhead = Math.max(0, Math.min(lookMax, v.x * lookMul));
     const targetX = p.x + lookAhead;
 
     // keep slightly above chassis center, but not too jumpy
@@ -1160,7 +1175,8 @@ export const HillClimbCanvas = forwardRef<
     const camY = camRef.current.y;
 
     // screen center: HCR keeps car left-ish, so you see upcoming terrain
-    const viewCX = w * 0.33;
+    // Mini Apps: nudge a bit further left for extra forward visibility.
+    const viewCX = w * (miniModeRef.current ? 0.29 : 0.33);
     const viewCY = h * 0.62;
 
     const toScreen = (v: planck.Vec2) => ({
@@ -1205,7 +1221,8 @@ export const HillClimbCanvas = forwardRef<
       dpr,
       headIdRef.current,
       headImgRef.current,
-      headImg2Ref.current
+      headImg2Ref.current,
+      miniModeRef.current
     );
 
     // vignette
@@ -1764,7 +1781,8 @@ function drawJeep(
   dpr: number,
   headId: HeadId,
   headImg: HTMLImageElement | null,
-  headImg2: HTMLImageElement | null
+  headImg2: HTMLImageElement | null,
+  miniMode: boolean
 ) {
   const chassis = car.chassis;
   const p = chassis.getPosition();
@@ -1787,7 +1805,14 @@ function drawJeep(
   ctx.save();
   ctx.translate(sp.x, sp.y);
   ctx.rotate(-a);
-  ctx.scale(dpr, dpr);
+  // IMPORTANT: In mini-app, the viewport SCALE tends to be lower than desktop.
+  // Previously the Jeep body was rendered in fixed pixel units (only DPR-scaled),
+  // while wheels used world meters * SCALE. That made wheels look "too small"
+  // in Mini Apps. We scale the body by SCALE relative to a baseline so body
+  // and wheels stay visually consistent.
+  const BODY_BASE_PX_PER_M = 45; // tuned against desktop default (keeps desktop look unchanged)
+  const bodyScale = miniMode ? (SCALE / BODY_BASE_PX_PER_M) : 1;
+  ctx.scale(dpr * bodyScale, dpr * bodyScale);
 
   // Jeep body (shaded)
   ctx.lineWidth = 3.5;
