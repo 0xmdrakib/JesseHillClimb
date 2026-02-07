@@ -6,6 +6,7 @@ import {
   custom,
   http,
   type Address,
+  parseEther,
 } from "viem";
 import { base } from "viem/chains";
 
@@ -197,6 +198,36 @@ export async function mintRunNft(
     abi: runNftAbi,
     functionName: "mintRun",
     args: [m, did, tokenUri],
+  });
+
+  return String(hash);
+}
+
+
+/**
+ * Simple native ETH tip (Base mainnet).
+ * Uses the connected wallet to send value to a recipient address.
+ */
+export async function sendTipEth(
+  toAddress: string,
+  ethAmount: string,
+  wallet?: ConnectedWallet,
+): Promise<string> {
+  const to = (toAddress ?? "").trim();
+  if (!to) throw new Error("Missing tip recipient address");
+
+  const amt = (ethAmount ?? "").trim();
+  if (!amt) throw new Error("Missing tip amount");
+
+  const { provider, address } = wallet ?? (await getOrConnectWallet());
+  await ensureBaseMainnet(provider);
+
+  const client = getWalletClient(provider, address);
+  const value = parseEther(amt);
+
+  const hash = await client.sendTransaction({
+    to: to as Address,
+    value,
   });
 
   return String(hash);
