@@ -775,6 +775,14 @@ export const HillClimbCanvas = forwardRef<
     throttleRef.current = cur + (target - cur) * k;
 
     const throttle = throttleRef.current;
+    // Some mobile webviews can let Box2D bodies fall asleep in edge cases.
+    // If the player is pressing a control, force the rig awake so motors/torques apply immediately.
+    if (Math.abs(target) > 0.02 || boostHeldRef.current) {
+      car.chassis.setAwake(true);
+      car.wheel1.setAwake(true);
+      car.wheel2.setAwake(true);
+    }
+
     const grounded = isGrounded();
 
     // start on first input
@@ -827,7 +835,8 @@ export const HillClimbCanvas = forwardRef<
     // Pitch: + = nose up. We only cut power when angle is *very* extreme.
     const pitch = car.chassis.getAngle();
     const pitchAbs = Math.abs(((pitch + Math.PI) % (2 * Math.PI)) - Math.PI);
-    const pitchCut = clamp01(1 - Math.max(0, pitchAbs - 1.35) / 0.65);
+    const pitchCutBase = clamp01(1 - Math.max(0, pitchAbs - 1.35) / 0.65);
+    const pitchCut = Math.abs(throttle) > 0.2 ? Math.max(0.18, pitchCutBase) : pitchCutBase;
 
     // Traction: in-air still lets you spin wheels a bit (for that classic "tilt" feel),
     // but reduced so it doesn't explode.
@@ -948,7 +957,20 @@ export const HillClimbCanvas = forwardRef<
       s.boost01 = Math.min(1, s.boost01 + 0.05 * DT);
     }
 
-    // --- Physics step (fixed timestep) ---
+    
+    // Anti-stuck assist: very rarely, the rig can settle into a balanced "dead" pose on steep terrain
+    // where wheel contacts exist but neither GAS nor BRAKE can meaningfully tip it.
+    // If we're grounded, moving very slowly, and extremely tilted, add a small pedal-based torque
+    // to encourage a natural fall to one side (without affecting normal driving).
+    if (s.status === "RUN" && groundedAny && Math.abs(throttle) > 0.2) {
+      const lv = car.chassis.getLinearVelocity();
+      const speed = Math.hypot(lv.x, lv.y);
+      if (speed < 0.25 && pitchAbs > 2.15) {
+        car.chassis.applyTorque(18 * throttle);
+      }
+    }
+
+// --- Physics step (fixed timestep) ---
     // Box2D/Planck sims are most stable with a fixed step (commonly 1/60s).
     // We step after applying forces, then compute derived state from the new positions.
     world.step(DT, VEL_ITERS, POS_ITERS);
@@ -1151,11 +1173,8 @@ export const HillClimbCanvas = forwardRef<
     // In Mini Apps we bias the camera a bit more forward to feel "ultra wide"
     // (more upcoming terrain visible) without changing gameplay scale.
     const isMini = miniModeRef.current;
-    // Mini-app camera tuning:
-    // - Keep some look-ahead for a wider forward view
-    // - But cap it lower than desktop so the car doesn't get pushed under left-side UI
-    const lookMul = isMini ? 0.55 : 0.6;
-    const lookMax = isMini ? 6 : 8;
+    const lookMul = isMini ? 0.78 : 0.6;
+    const lookMax = isMini ? 10 : 8;
     const lookAhead = Math.max(0, Math.min(lookMax, v.x * lookMul));
     const targetX = p.x + lookAhead;
 
@@ -1178,8 +1197,8 @@ export const HillClimbCanvas = forwardRef<
     const camY = camRef.current.y;
 
     // screen center: HCR keeps car left-ish, so you see upcoming terrain
-    // Mini Apps: slight left bias, but not so much that the car can slide under left-side UI.
-    const viewCX = w * (miniModeRef.current ? 0.32 : 0.33);
+    // Mini Apps: nudge a bit further left for extra forward visibility.
+    const viewCX = w * (miniModeRef.current ? 0.29 : 0.33);
     const viewCY = h * 0.62;
 
     const toScreen = (v: planck.Vec2) => ({
@@ -1203,9 +1222,7 @@ export const HillClimbCanvas = forwardRef<
     drawForest(ctx, w, h, camX, dpr, 0.52, "#6aa886", 0.72);
 
     // ground (dirt + grass)
-    // IMPORTANT: must share the same viewCX/viewCY as the car, otherwise the road can
-    // appear shifted relative to physics (wheels look like they're floating on slopes).
-    drawGround(ctx, w, h, track, camX, camY, dpr, viewCX, viewCY);
+    drawGround(ctx, w, h, track, camX, camY, dpr);
 
     // pickups
     for (const p of pickupsRef.current) {
@@ -1540,17 +1557,9 @@ function drawMountains(
   ctx.restore();
 }
 
-function drawGround(
-  ctx: CanvasRenderingContext2D,
-  w: number,
-  h: number,
-  track: Track,
-  camX: number,
-  camY: number,
-  dpr: number,
-  viewCX: number,
-  viewCY: number
-) {
+function drawGround(ctx: CanvasRenderingContext2D, w: number, h: number, track: Track, camX: number, camY: number, dpr: number) {
+  const viewCX = w * 0.33;
+  const viewCY = h * 0.62;
 
   const screenYOfGround = (xWorld: number) => {
     const yWorld = sampleTrackY(track, xWorld);
@@ -1802,17 +1811,14 @@ function drawJeep(
   const a = chassis.getAngle();
   const sp = toScreen(p);
 
-  // soft shadow: looks nice on desktop, but in Mini Apps it can read as a visual bug
-  // (an extra "blob" that doesn't match the terrain perspective), so keep it desktop-only.
-  if (!miniMode) {
-    ctx.save();
-    ctx.globalAlpha = 0.18;
-    ctx.fillStyle = "#000";
-    ctx.beginPath();
-    ctx.ellipse(sp.x, sp.y + 58 * dpr, 92 * dpr, 18 * dpr, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-  }
+  // soft shadow (gives depth; works even without a separate ground projection)
+  ctx.save();
+  ctx.globalAlpha = 0.18;
+  ctx.fillStyle = "#000";
+  ctx.beginPath();
+  ctx.ellipse(sp.x, sp.y + 58 * dpr, 92 * dpr, 18 * dpr, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
 
   // wheels
   drawWheel(ctx, toScreen(car.wheel1.getPosition()), car.wheel1.getAngle(), 0.34, dpr);
