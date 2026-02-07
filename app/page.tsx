@@ -47,32 +47,58 @@ function shortHash(h?: string | null) {
 
 function PlusIcon() {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      {/* Rounded-square "add app" icon (cleaner at small sizes) */}
-      <path
-        d="M7 3h10a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinejoin="round"
-      />
-      <path d="M12 8v8M8 12h8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
     </svg>
   );
 }
 
 function ShareIcon() {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      {/* Arrow-out share icon (less noisy than the node graph) */}
-      <path d="M14 3h7v7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M21 3l-9 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
       <path
-        d="M10 7H7a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3"
+        d="M18 16a3 3 0 0 0-2.2 1L8.9 13.6a3.1 3.1 0 0 0 0-3.2L15.8 7A3 3 0 1 0 14.5 5.2L7.3 8.9A3 3 0 1 0 7.3 15l7.2 3.7A3 3 0 1 0 18 16Z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+
+function RotateIcon(props: { side: "right" | "left" }) {
+  const flip = props.side === "left";
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path
+        d={flip ? "M7 7h6a7 7 0 1 1-6.5 9.5" : "M17 7h-6a7 7 0 1 0 6.5 9.5"}
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <path
+        d={flip ? "M7 7l-1 4 4-1" : "M17 7l1 4-4-1"}
         stroke="currentColor"
         strokeWidth="2"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
+    </svg>
+  );
+}
+
+function TipIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path
+        d="M12 22s7-4.5 7-11a7 7 0 1 0-14 0c0 6.5 7 11 7 11Z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+      <path d="M12 9v4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="M12 7h.01" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
     </svg>
   );
 }
@@ -94,6 +120,19 @@ export default function Page() {
 
   const [mini, setMini] = useState<{ isMini: boolean; fid: number | null }>({ isMini: false, fid: null });
   const [isPortrait, setIsPortrait] = useState(false);
+
+  // Mini App: optional flip between RIGHT-landscape (default) and LEFT-landscape in virtual-landscape mode.
+  const LANDSCAPE_SIDE_KEY = "jhc_landscape_side_v1";
+  const [landscapeSide, setLandscapeSide] = useState<"right" | "left">("right");
+
+  // Tip modal (Mini App)
+  const [tipOpen, setTipOpen] = useState(false);
+  const [ethUsd, setEthUsd] = useState<number | null>(null);
+  const [tipBusy, setTipBusy] = useState(false);
+  const [tipTx, setTipTx] = useState<string | null>(null);
+  const [tipErr, setTipErr] = useState<string>("");
+  const [customUsd, setCustomUsd] = useState<string>("");
+  const [customEth, setCustomEth] = useState<string>("");
 
   const [walletAddr, setWalletAddr] = useState<string | null>(null);
   const [walletSource, setWalletSource] = useState<string>("");
@@ -144,6 +183,18 @@ export default function Page() {
       setMini({ isMini: Boolean(sdk), fid });
     })();
   }, []);
+
+  // Load saved landscape side preference in Mini App.
+  useEffect(() => {
+    if (!mini.isMini) return;
+    try {
+      const v = window.localStorage.getItem(LANDSCAPE_SIDE_KEY);
+      if (v === "left" || v === "right") setLandscapeSide(v);
+    } catch {
+      // ignore
+    }
+  }, [mini.isMini]);
+
 
   // Orientation detection (used for Mini App virtual landscape)
   useEffect(() => {
@@ -294,7 +345,20 @@ export default function Page() {
     };
   }, [mini.isMini]);
 
-  const miniVirtualLandscape = mini.isMini && isPortrait;
+  
+  const toggleLandscapeSide = () => {
+    setLandscapeSide((s) => {
+      const next = s === "right" ? "left" : "right";
+      try {
+        window.localStorage.setItem(LANDSCAPE_SIDE_KEY, next);
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  };
+
+const miniVirtualLandscape = mini.isMini && isPortrait;
 
   // Pause automatically when the app is backgrounded.
   useEffect(() => {
@@ -308,6 +372,28 @@ export default function Page() {
     if (driverOpen || walletModalOpen) setPaused(true);
     else if (!document.hidden) setPaused(false);
   }, [driverOpen, walletModalOpen]);
+
+  // Fetch ETH/USD spot price when tip modal opens.
+  useEffect(() => {
+    if (!tipOpen) return;
+    let alive = true;
+    (async () => {
+      try {
+        const r = await fetch("/api/ethusd", { cache: "no-store" });
+        if (!r.ok) return;
+        const j = await r.json();
+        const p = Number(j?.usd);
+        if (!Number.isFinite(p) || p <= 0) return;
+        if (alive) setEthUsd(p);
+      } catch {
+        // ignore
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [tipOpen]);
+
 
   // Keyboard fallback (desktop): ArrowRight = GAS, ArrowLeft = BRAKE, R = reset
   useEffect(() => {
@@ -594,7 +680,7 @@ export default function Page() {
         className={
           "shell " +
           (mini.isMini ? "shellMini" : "") +
-          (miniVirtualLandscape ? " miniVirtualLandscape" : "")
+          (miniVirtualLandscape ? " miniVirtualLandscape" : "") + (miniVirtualLandscape && landscapeSide === "left" ? " miniLandscapeLeft" : "")
         }
       >
         <div className={"header " + (mini.isMini ? "headerMini" : "")}>
@@ -626,7 +712,6 @@ export default function Page() {
               }}
               headId={head}
               paused={paused}
-              miniMode={mini.isMini}
               seed={seed}
               bestM={bestOnchainM}
               onState={setState}
@@ -664,7 +749,37 @@ export default function Page() {
             </div>
 
             {/* Driver button (top-right) */}
-            <button
+
+            <div className="topRightTools">
+              {miniVirtualLandscape ? (
+                <button
+                  type="button"
+                  className="toolIconBtn"
+                  onClick={toggleLandscapeSide}
+                  aria-label="Flip landscape"
+                  title={landscapeSide === "left" ? "Landscape: Left" : "Landscape: Right"}
+                >
+                  <RotateIcon side={landscapeSide} />
+                </button>
+              ) : null}
+
+              {mini.isMini ? (
+                <button
+                  type="button"
+                  className="toolIconBtn"
+                  onClick={() => {
+                    setTipTx(null);
+                    setTipErr("");
+                    setTipOpen(true);
+                  }}
+                  aria-label="Tip"
+                  title="Tip"
+                >
+                  <TipIcon />
+                </button>
+              ) : null}
+
+              <button
               type="button"
               className="driverBtn"
               onClick={() => setDriverOpen((o) => !o)}
@@ -677,6 +792,8 @@ export default function Page() {
                 <ChevronDownIcon />
               </span>
             </button>
+            </div>
+
 
             {driverOpen ? (
               <div className="driverBackdrop" onClick={() => setDriverOpen(false)} role="presentation">
@@ -697,6 +814,123 @@ export default function Page() {
                 </div>
               </div>
             ) : null}
+
+            {tipOpen ? (
+              <div className="tipBackdrop" onClick={() => setTipOpen(false)} role="presentation">
+                <div className="tipCard" onClick={(e) => e.stopPropagation()}>
+                  <div className="tipTop">
+                    <div>
+                      <div className="tipTitle">Tip</div>
+                      <div className="tipPrice">
+                        {ethUsd ? `1 ETH ≈ $${ethUsd.toFixed(2)}` : "Loading ETH price…"}
+                      </div>
+                    </div>
+                    <button type="button" className="toolIconBtn" onClick={() => setTipOpen(false)} aria-label="Close tip" title="Close">
+                      ✕
+                    </button>
+                  </div>
+
+                  <div className="tipGrid">
+                    {[10, 100, 1000].map((usd) => {
+                      const eth = ethUsd ? usd / ethUsd : 0;
+                      const ethStr = ethUsd ? eth.toFixed(6).replace(/0+$/, "").replace(/\.$/, "") : "…";
+                      return (
+                        <button
+                          key={usd}
+                          type="button"
+                          className="tipAmtBtn"
+                          onClick={() => {
+                            setCustomUsd(String(usd));
+                            setCustomEth(ethUsd ? (usd / ethUsd).toFixed(8) : "");
+                          }}
+                          disabled={!ethUsd}
+                        >
+                          <div className="tipAmtUsd">${usd}</div>
+                          <div className="tipAmtEth">≈ {ethStr} ETH</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="tipCustomRow">
+                    <div className="tipField">
+                      <div className="tipLabel">USD</div>
+                      <input
+                        className="tipInput"
+                        inputMode="decimal"
+                        value={customUsd}
+                        placeholder="Custom USD"
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setCustomUsd(v);
+                          const n = Number(v);
+                          if (ethUsd && Number.isFinite(n) && n > 0) setCustomEth((n / ethUsd).toFixed(8));
+                          else if (!v) setCustomEth("");
+                        }}
+                      />
+                    </div>
+
+                    <div className="tipField">
+                      <div className="tipLabel">ETH</div>
+                      <input
+                        className="tipInput"
+                        inputMode="decimal"
+                        value={customEth}
+                        placeholder="ETH amount"
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setCustomEth(v);
+                          const n = Number(v);
+                          if (ethUsd && Number.isFinite(n) && n > 0) setCustomUsd((n * ethUsd).toFixed(2));
+                          else if (!v) setCustomUsd("");
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="tipActions">
+                    <button
+                      type="button"
+                      className="tipSendBtn"
+                      disabled={tipBusy || !ethUsd}
+                      onClick={async () => {
+                        const tipTo = (process.env.NEXT_PUBLIC_TIP_ADDRESS ?? "").trim();
+                        if (!tipTo) {
+                          setTipErr("Tip address is not configured (set NEXT_PUBLIC_TIP_ADDRESS).");
+                          return;
+                        }
+                        const eth = Number(customEth);
+                        if (!Number.isFinite(eth) || eth <= 0) {
+                          setTipErr("Enter a valid tip amount.");
+                          return;
+                        }
+
+                        setTipBusy(true);
+                        setTipErr("");
+                        setTipTx(null);
+
+                        try {
+                          const { sendTipEth } = await import("@/lib/onchain");
+                          const hash = await sendTipEth(tipTo, customEth);
+                          setTipTx(hash);
+                        } catch (e: any) {
+                          const msg = e?.message ? String(e.message) : "Tip failed";
+                          setTipErr(msg);
+                        } finally {
+                          setTipBusy(false);
+                        }
+                      }}
+                    >
+                      {tipBusy ? "Sending…" : "Send tip"}
+                    </button>
+                  </div>
+
+                  {tipTx ? <div className="tipStatus">Tx: {shortHash(tipTx)}</div> : null}
+                  {tipErr ? <div className="tipStatus" style={{ color: "#9a1a1a" }}>{tipErr}</div> : null}
+                </div>
+              </div>
+            ) : null}
+
 
             {/* Wallet picker (web only) */}
             {!mini.isMini && walletModalOpen ? (
