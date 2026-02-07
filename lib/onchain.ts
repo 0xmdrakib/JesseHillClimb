@@ -5,6 +5,7 @@ import {
   createWalletClient,
   custom,
   http,
+  parseEther,
   type Address,
 } from "viem";
 import { base } from "viem/chains";
@@ -197,6 +198,24 @@ export async function mintRunNft(
     abi: runNftAbi,
     functionName: "mintRun",
     args: [m, did, tokenUri],
+  });
+
+  return String(hash);
+}
+
+
+export async function sendEthTip(
+  to: string,
+  amountEth: string,
+  wallet?: ConnectedWallet,
+): Promise<string> {
+  const { provider, address } = wallet ?? (await getOrConnectWallet());
+  await ensureBaseMainnet(provider);
+
+  const client = getWalletClient(provider, address);
+  const hash = await client.sendTransaction({
+    to: to as Address,
+    value: parseEther(amountEth),
   });
 
   return String(hash);
