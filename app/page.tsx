@@ -46,6 +46,28 @@ function shortHash(h?: string | null) {
   return `${h.slice(0, 6)}…${h.slice(-4)}`;
 }
 
+function humanizeTxErr(err: any) {
+  const e = err?.cause ?? err;
+  const code = e?.code ?? e?.cause?.code;
+  const name = String(e?.name ?? "");
+  const msg = String(e?.shortMessage ?? e?.message ?? e?.details ?? "").toLowerCase();
+
+  // EIP-1193 userRejectedRequest is commonly code 4001.
+  // wagmi/viem may also surface ACTION_REJECTED or similar names/messages.
+  if (
+    code === 4001 ||
+    code === "ACTION_REJECTED" ||
+    /userrejectedrequest/i.test(name) ||
+    msg.includes("user rejected") ||
+    msg.includes("rejected the request") ||
+    msg.includes("denied transaction") ||
+    msg.includes("request rejected")
+  ) {
+    return "User rejected the tx";
+  }
+  return "Transaction failed";
+}
+
 function PlusIcon() {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -121,20 +143,38 @@ function RotateIcon() {
 }
 
 function TipIcon() {
-  // simple "coin/heart" hybrid
+  // Clean "gift" icon (reads well at small sizes)
   return (
     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path
-        d="M12 21s-7-4.6-7-10.5A4.5 4.5 0 0 1 9.5 6c1.1 0 2.1.4 2.5 1 .4-.6 1.4-1 2.5-1A4.5 4.5 0 0 1 19 10.5C19 16.4 12 21 12 21Z"
+        d="M20 12v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8"
         stroke="currentColor"
         strokeWidth="2"
         strokeLinejoin="round"
       />
       <path
-        d="M9.2 12.2h5.6"
+        d="M4 12h16v-2a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v2Z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M12 8v14"
         stroke="currentColor"
         strokeWidth="2"
         strokeLinecap="round"
+      />
+      <path
+        d="M12 8H8.8a2.2 2.2 0 1 1 0-4.4c1.9 0 3.2 2.6 3.2 4.4Z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M12 8h3.2a2.2 2.2 0 1 0 0-4.4c-1.9 0-3.2 2.6-3.2 4.4Z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
       />
     </svg>
   );
@@ -636,7 +676,7 @@ export default function Page() {
       setScoreTx(tx);
       await refreshBest(addr);
     } catch (e: any) {
-      setActionErr(e?.message ? String(e.message) : "Score submission failed");
+      setActionErr(humanizeTxErr(e));
     } finally {
       setScoreBusy(false);
     }
@@ -690,7 +730,7 @@ export default function Page() {
       const tx = await mintRunNft(runNftAddress, meters, driverId, out.tokenUri, w ? { provider: w.provider, address: w.address as any } : undefined);
       setMintTx(tx);
     } catch (e: any) {
-      setActionErr(e?.message ? String(e.message) : "Mint failed");
+      setActionErr(humanizeTxErr(e));
     } finally {
       setMintBusy(false);
     }
@@ -945,7 +985,7 @@ export default function Page() {
                               const tx = await sendEthTip(tipTo, ethAmount, w ? { provider: w.provider, address: w.address as any } : undefined);
                               setTipTx(tx);
                             } catch (e: any) {
-                              setTipErr(e?.message ? String(e.message) : "Tip failed");
+                              setTipErr(humanizeTxErr(e));
                             } finally {
                               setTipBusy(false);
                             }
