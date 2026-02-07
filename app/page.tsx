@@ -841,17 +841,15 @@ export default function Page() {
                 </button>
               ) : null}
 
-              {mini.isMini ? (
-                <button
-                  type="button"
-                  className="miniToolBtn"
-                  onClick={() => setTipOpen(true)}
-                  aria-label="Tip"
-                  title="Tip"
-                >
-                  <TipIcon />
-                </button>
-              ) : null}
+              <button
+                type="button"
+                className="miniToolBtn"
+                onClick={() => setTipOpen(true)}
+                aria-label="Tip"
+                title="Tip"
+              >
+                <TipIcon />
+              </button>
 
 <button
               type="button"
