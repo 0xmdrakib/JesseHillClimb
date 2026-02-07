@@ -12,8 +12,8 @@ import {
   readBestMeters,
   submitScoreMeters,
   getNextTokenId,
-  mintRunNft,
-} from "@/lib/onchain";
+  mintRunNft,,
+  sendEthTip} from "@/lib/onchain";
 
 // Browser wallets: don't assume MetaMask. Prefer "any" (EIP-6963 will still pick a sensible default).
 const DEFAULT_INJECTED_WALLET = "any" as const;
@@ -85,6 +85,68 @@ function ChevronDownIcon() {
   );
 }
 
+function RotateIcon() {
+  // minimal rotate/flip icon
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M4 12a8 8 0 0 1 13.66-5.66"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <path
+        d="M18 3v4h-4"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M20 12a8 8 0 0 1-13.66 5.66"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <path
+        d="M6 21v-4h4"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function TipIcon() {
+  // simple "coin/heart" hybrid
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M12 21s-7-4.6-7-10.5A4.5 4.5 0 0 1 9.5 6c1.1 0 2.1.4 2.5 1 .4-.6 1.4-1 2.5-1A4.5 4.5 0 0 1 19 10.5C19 16.4 12 21 12 21Z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M9.2 12.2h5.6"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function XIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export default function Page() {
   const [head, setHead] = useState<HeadId>("jesse");
   const [driverOpen, setDriverOpen] = useState(false);
@@ -93,6 +155,19 @@ export default function Page() {
   const [boostHeld, setBoostHeld] = useState(false);
 
   const [mini, setMini] = useState<{ isMini: boolean; fid: number | null }>({ isMini: false, fid: null });
+
+  // Mini App: allow user to flip virtual-landscape direction (default = current)
+  const [landscapeSide, setLandscapeSide] = useState<"right" | "left">("right");
+
+  // Tip UI (Mini App)
+  const [tipOpen, setTipOpen] = useState(false);
+  const [ethUsd, setEthUsd] = useState<number | null>(null);
+  const [ethUsdSource, setEthUsdSource] = useState<string>("");
+  const [tipPresetUsd, setTipPresetUsd] = useState<number>(10);
+  const [tipCustomUsd, setTipCustomUsd] = useState<string>("");
+  const [tipBusy, setTipBusy] = useState(false);
+  const [tipErr, setTipErr] = useState("");
+  const [tipTx, setTipTx] = useState<string | null>(null);
   const [isPortrait, setIsPortrait] = useState(false);
 
   const [walletAddr, setWalletAddr] = useState<string | null>(null);
@@ -185,6 +260,52 @@ export default function Page() {
       window.removeEventListener("resize", on);
     };
   }, []);
+
+  // Persist user preference for mini virtual-landscape direction
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const v = localStorage.getItem("jhc_landscape_side");
+      if (v === "left" || v === "right") setLandscapeSide(v);
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.setItem("jhc_landscape_side", landscapeSide);
+    } catch {}
+  }, [landscapeSide]);
+
+  // Fetch ETH/USD when opening tip modal (server route uses Coinbase spot price; fallback to CoinGecko)
+  useEffect(() => {
+    if (!tipOpen) return;
+    let alive = true;
+    (async () => {
+      try {
+        setTipErr("");
+        setTipTx(null);
+        setEthUsd(null);
+        setEthUsdSource("");
+        const r = await fetch("/api/ethusd", { cache: "no-store" });
+        const j = await r.json();
+        const usd = Number(j?.usd);
+        if (!alive) return;
+        if (r.ok && Number.isFinite(usd) && usd > 0) {
+          setEthUsd(usd);
+          setEthUsdSource(String(j?.source || ""));
+        } else {
+          setTipErr("Failed to fetch ETH price");
+        }
+      } catch {
+        if (!alive) return;
+        setTipErr("Failed to fetch ETH price");
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [tipOpen]);
 
   // Mini App background: match the stage sky so we never show a 1px "gap" stripe on the right.
   useEffect(() => {
@@ -594,7 +715,8 @@ export default function Page() {
         className={
           "shell " +
           (mini.isMini ? "shellMini" : "") +
-          (miniVirtualLandscape ? " miniVirtualLandscape" : "")
+          (miniVirtualLandscape ? " miniVirtualLandscape" : "") +
+          (miniVirtualLandscape && landscapeSide === "left" ? " landscapeLeft" : "")
         }
       >
         <div className={"header " + (mini.isMini ? "headerMini" : "")}>
@@ -664,9 +786,35 @@ export default function Page() {
             </div>
 
             {/* Driver button (top-right) */}
-            <button
+            
+            <div className="topRightTools">
+              {miniVirtualLandscape ? (
+                <button
+                  type="button"
+                  className="miniToolBtn"
+                  onClick={() => setLandscapeSide((s) => (s === "left" ? "right" : "left"))}
+                  aria-label="Flip landscape direction"
+                  title="Flip landscape direction"
+                >
+                  <RotateIcon />
+                </button>
+              ) : null}
+
+              {mini.isMini ? (
+                <button
+                  type="button"
+                  className="miniToolBtn"
+                  onClick={() => setTipOpen(true)}
+                  aria-label="Tip"
+                  title="Tip"
+                >
+                  <TipIcon />
+                </button>
+              ) : null}
+
+<button
               type="button"
-              className="driverBtn"
+              className="driverBtn driverBtnInTools"
               onClick={() => setDriverOpen((o) => !o)}
               aria-label="Driver"
               title="Driver"
@@ -677,6 +825,8 @@ export default function Page() {
                 <ChevronDownIcon />
               </span>
             </button>
+            </div>
+
 
             {driverOpen ? (
               <div className="driverBackdrop" onClick={() => setDriverOpen(false)} role="presentation">
@@ -694,6 +844,126 @@ export default function Page() {
                       setDriverOpen(false);
                     }}
                   />
+                </div>
+              </div>
+            ) : null}
+
+            {tipOpen ? (
+              <div className="tipBackdrop" onClick={() => setTipOpen(false)} role="presentation">
+                <div className="tipCard" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+                  <div className="tipTop">
+                    <div className="tipTitle">Tip</div>
+                    <button type="button" className="tipClose" onClick={() => setTipOpen(false)} aria-label="Close">
+                      <XIcon />
+                    </button>
+                  </div>
+
+                  <div className="tipMeta">
+                    {ethUsd ? (
+                      <>
+                        1 ETH ≈ ${ethUsd.toFixed(2)} {ethUsdSource ? <span style={{ opacity: 0.7 }}>({ethUsdSource})</span> : null}
+                      </>
+                    ) : (
+                      <>Loading ETH price…</>
+                    )}
+                  </div>
+
+                  {(() => {
+                    const usd = Number(tipCustomUsd) > 0 ? Number(tipCustomUsd) : tipPresetUsd;
+                    const eth = ethUsd && ethUsd > 0 ? usd / ethUsd : 0;
+                    const ethStr = ethUsd && ethUsd > 0 ? eth.toFixed(6) : "…";
+                    return (
+                      <>
+                        <div className="tipGrid">
+                          {[
+                            { usd: 10, label: "$10" },
+                            { usd: 100, label: "$100" },
+                            { usd: 1000, label: "$1000" },
+                          ].map((o) => (
+                            <button
+                              key={o.usd}
+                              type="button"
+                              className={"tipAmt " + (tipCustomUsd === "" && tipPresetUsd === o.usd ? "tipAmtActive" : "")}
+                              onClick={() => {
+                                setTipCustomUsd("");
+                                setTipPresetUsd(o.usd);
+                              }}
+                            >
+                              <strong>{o.label}</strong>
+                              <span>{ethUsd ? `${(o.usd / ethUsd).toFixed(6)} ETH` : "—"}</span>
+                            </button>
+                          ))}
+                        </div>
+
+                        <div className="tipRow">
+                          <input
+                            className="tipInput"
+                            inputMode="decimal"
+                            placeholder="Custom USD (e.g. 25)"
+                            value={tipCustomUsd}
+                            onChange={(e) => setTipCustomUsd(e.target.value.replace(/[^0-9.]/g, ""))}
+                          />
+                          <div style={{ fontSize: 12, opacity: 0.85, whiteSpace: "nowrap" }}>
+                            ≈ {ethStr} ETH
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          className="tipSend"
+                          disabled={tipBusy || !ethUsd}
+                          onClick={async () => {
+                            try {
+                              setTipErr("");
+                              setTipTx(null);
+
+                              const tipTo = (process.env.NEXT_PUBLIC_TIP_ADDRESS ?? "").trim();
+                              if (!tipTo) {
+                                setTipErr("Missing NEXT_PUBLIC_TIP_ADDRESS in .env.local");
+                                return;
+                              }
+
+                              const usd2 = Number(tipCustomUsd) > 0 ? Number(tipCustomUsd) : tipPresetUsd;
+                              if (!Number.isFinite(usd2) || usd2 <= 0) {
+                                setTipErr("Enter a valid amount");
+                                return;
+                              }
+
+                              if (!ethUsd || ethUsd <= 0) {
+                                setTipErr("ETH price unavailable");
+                                return;
+                              }
+
+                              const eth2 = usd2 / ethUsd;
+                              // Keep a sane decimal precision for parseEther (avoid scientific notation)
+                              const ethAmount = eth2.toFixed(6);
+
+                              setTipBusy(true);
+                              await ensureConnected();
+                              const w = walletRef.current;
+                              const tx = await sendEthTip(tipTo, ethAmount, w ? { provider: w.provider, address: w.address as any } : undefined);
+                              setTipTx(tx);
+                            } catch (e: any) {
+                              setTipErr(e?.message ? String(e.message) : "Tip failed");
+                            } finally {
+                              setTipBusy(false);
+                            }
+                          }}
+                        >
+                          {tipBusy ? "Sending…" : "Send tip"}
+                        </button>
+
+                        {tipTx ? (
+                          <div className="tipMeta" style={{ marginTop: 10 }}>
+                            Sent ✅
+                            <div style={{ fontSize: 12, opacity: 0.8, marginTop: 4, overflowWrap: "anywhere" }}>{tipTx}</div>
+                          </div>
+                        ) : null}
+
+                        {tipErr ? <div className="tipErr">{tipErr}</div> : null}
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
             ) : null}
