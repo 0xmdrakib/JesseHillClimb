@@ -626,6 +626,7 @@ export default function Page() {
               }}
               headId={head}
               paused={paused}
+              miniMode={mini.isMini}
               seed={seed}
               bestM={bestOnchainM}
               onState={setState}
