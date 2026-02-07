@@ -750,28 +750,33 @@ canvas{
 
 .tipBackdrop{
   pointer-events:auto;
-  position:absolute;
+  position:fixed;
   inset:0;
-  background: rgba(245,251,255,.55);
-  backdrop-filter: blur(6px);
+  z-index: 120;
+  background: rgba(10,14,20,.35);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
   display:flex;
-  justify-content:flex-end;
-  align-items:flex-start;
+  justify-content:center;
+  align-items:center;
   padding:
-    calc(68px + var(--safe-top))
+    calc(12px + var(--safe-top))
     calc(12px + var(--safe-right))
     calc(12px + var(--safe-bottom))
     calc(12px + var(--safe-left));
 }
 
 .tipCard{
-  width:min(360px, calc(100% - 24px));
-  background: rgba(255,255,255,.92);
+  width:min(380px, calc(100% - 24px));
+  max-height: calc(100dvh - 24px - var(--safe-top) - var(--safe-bottom));
+  overflow:auto;
+  background: rgba(255,255,255,.96);
   border: 1px solid rgba(0,0,0,.10);
   border-radius:18px;
-  box-shadow: 0 30px 80px rgba(0,0,0,.18);
+  box-shadow: 0 30px 80px rgba(0,0,0,.22);
   padding:14px 14px 12px;
 }
+
 
 .tipTop{
   display:flex;
