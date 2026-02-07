@@ -39,7 +39,7 @@ const embed = {
 
 export const metadata: Metadata = {
   title: APP_NAME,
-  description: "Classic hill-climb mini game optimized for Base + Farcaster Mini Apps.",
+  description: "Jesse Hill Climb, a hill climb game with NFT and onchain feature.",
   other: {
     // Base + Farcaster embed discovery
     "fc:miniapp": JSON.stringify(embed),
@@ -49,7 +49,7 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: APP_NAME,
-    description: "Drive the hills, collect coins, share your best run.",
+    description: "Jesse Hill Climb, a hill climb game with NFT and onchain feature.",
     images: [{ url: imageUrl }],
   },
 };
