@@ -270,18 +270,24 @@ export const HillClimbCanvas = forwardRef<
   {
     headId: HeadId;
     paused: boolean;
+    /** True only when running inside a Farcaster/Base Mini App host. */
+    miniMode?: boolean;
     seed?: number;
     onState: (s: HillClimbState) => void;
     bestM?: number;
     onGameOver?: (p: { snapshotDataUrl: string | null; meters: number; status: "CRASH" | "OUT_OF_FUEL" }) => void;
   }
 >(function HillClimbCanvas(props, ref) {
-  const { headId, paused, seed, onState, bestM, onGameOver } = props;
+  const { headId, paused, miniMode, seed, onState, bestM, onGameOver } = props;
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const pausedRef = useRef(paused);
   const headIdRef = useRef(headId);
+
+  // Mini mode can flip from false->true shortly after mount (once the SDK initializes).
+  // The RAF loop captures closures on mount, so keep a ref for runtime checks.
+  const miniModeRef = useRef(Boolean(miniMode));
 
   const throttleTargetRef = useRef(0); // what the user is doing right now
   const throttleRef = useRef(0); // smoothed (game feel)
@@ -293,7 +299,6 @@ export const HillClimbCanvas = forwardRef<
   const bestRef = useRef(0);
   const groundedRef = useRef({ w1: 0, w2: 0 }); // wheel contact counts
   const crashFreezeRef = useRef({ t: 0, frozen: false });
-  const unstickRef = useRef(0);
 
   const worldRef = useRef<planck.World | null>(null);
   const carRef = useRef<CarRig | null>(null);
@@ -340,6 +345,10 @@ export const HillClimbCanvas = forwardRef<
   useEffect(() => {
     pausedRef.current = paused;
   }, [paused]);
+
+  useEffect(() => {
+    miniModeRef.current = Boolean(miniMode);
+  }, [miniMode]);
 
   useEffect(() => {
     // New seed => fresh terrain/run
@@ -747,28 +756,14 @@ export const HillClimbCanvas = forwardRef<
   useImperativeHandle(ref, () => ({
     setThrottle: (t: number) => {
       throttleTargetRef.current = Math.max(-1, Math.min(1, t));
-      wakeCar();
     },
     setBoost: (on: boolean) => {
       boostHeldRef.current = Boolean(on);
-      if (on) wakeCar();
     },
     reset,
   }));
 
   const isGrounded = () => groundedRef.current.w1 + groundedRef.current.w2 > 0;
-
-  const wakeCar = () => {
-    const car = carRef.current;
-    if (!car) return;
-    try {
-      car.chassis.setAwake(true);
-      car.wheel1.setAwake(true);
-      car.wheel2.setAwake(true);
-    } catch {
-      // ignore
-    }
-  };
 
   const stepGame = (world: planck.World, car: CarRig) => {
     const s = stateRef.current;
@@ -781,39 +776,6 @@ export const HillClimbCanvas = forwardRef<
 
     const throttle = throttleRef.current;
     const grounded = isGrounded();
-
-
-    // UNSTICK: extremely rare case where the car ends up perfectly balanced and almost unresponsive.
-    // If the player is pressing GAS/BRAKE and the car is near-vertical + nearly stationary,
-    // nudge it so it tips left/right instead of getting stuck.
-    if (unstickRef.current > 0) unstickRef.current = Math.max(0, unstickRef.current - DT);
-    const wantDrive = Math.abs(throttleTargetRef.current) > 0.2 || boostHeldRef.current;
-    if (wantDrive && unstickRef.current === 0 && grounded) {
-      const carNow = carRef.current;
-      if (carNow) {
-        const a = carNow.chassis.getAngle();
-        const v = carNow.chassis.getLinearVelocity();
-        const av = Math.abs(carNow.chassis.getAngularVelocity());
-        const speed = Math.hypot(v.x, v.y);
-
-        // Near-vertical when cos(angle) ~ 0
-        const nearVertical = Math.abs(Math.cos(a)) < 0.08;
-        const nearlyStopped = speed < 0.05 && av < 0.15;
-
-        if (nearVertical && nearlyStopped) {
-          const sign = throttleTargetRef.current >= 0 ? -1 : 1;
-          try {
-            carNow.chassis.applyAngularImpulse(0.22 * sign, true);
-            carNow.chassis.setAwake(true);
-            carNow.wheel1.setAwake(true);
-            carNow.wheel2.setAwake(true);
-          } catch {
-            // ignore
-          }
-          unstickRef.current = 0.65; // cooldown so it doesn't spam
-        }
-      }
-    }
 
     // start on first input
     if (s.status === "IDLE" && Math.abs(throttle) > 0.02) s.status = "RUN";
@@ -1186,7 +1148,15 @@ export const HillClimbCanvas = forwardRef<
     const v = car.chassis.getLinearVelocity();
 
     // look-ahead (HCR camera looks forward)
-    const lookAhead = Math.max(0, Math.min(8, v.x * 0.6));
+    // In Mini Apps we bias the camera a bit more forward to feel "ultra wide"
+    // (more upcoming terrain visible) without changing gameplay scale.
+    const isMini = miniModeRef.current;
+    // Mini-app camera tuning:
+    // - Keep some look-ahead for a wider forward view
+    // - But cap it lower than desktop so the car doesn't get pushed under left-side UI
+    const lookMul = isMini ? 0.55 : 0.6;
+    const lookMax = isMini ? 6 : 8;
+    const lookAhead = Math.max(0, Math.min(lookMax, v.x * lookMul));
     const targetX = p.x + lookAhead;
 
     // keep slightly above chassis center, but not too jumpy
@@ -1208,7 +1178,8 @@ export const HillClimbCanvas = forwardRef<
     const camY = camRef.current.y;
 
     // screen center: HCR keeps car left-ish, so you see upcoming terrain
-    const viewCX = w * 0.33;
+    // Mini Apps: slight left bias, but not so much that the car can slide under left-side UI.
+    const viewCX = w * (miniModeRef.current ? 0.32 : 0.33);
     const viewCY = h * 0.62;
 
     const toScreen = (v: planck.Vec2) => ({
@@ -1232,7 +1203,9 @@ export const HillClimbCanvas = forwardRef<
     drawForest(ctx, w, h, camX, dpr, 0.52, "#6aa886", 0.72);
 
     // ground (dirt + grass)
-    drawGround(ctx, w, h, track, camX, camY, dpr);
+    // IMPORTANT: must share the same viewCX/viewCY as the car, otherwise the road can
+    // appear shifted relative to physics (wheels look like they're floating on slopes).
+    drawGround(ctx, w, h, track, camX, camY, dpr, viewCX, viewCY);
 
     // pickups
     for (const p of pickupsRef.current) {
@@ -1253,7 +1226,8 @@ export const HillClimbCanvas = forwardRef<
       dpr,
       headIdRef.current,
       headImgRef.current,
-      headImg2Ref.current
+      headImg2Ref.current,
+      miniModeRef.current
     );
 
     // vignette
@@ -1428,7 +1402,18 @@ function drawHills(
   const freq = 0.08 + 0.06 * parallax;
   ctx.moveTo(0, h);
 
-  for (let sx = 0; sx <= w; sx += 18 * dpr) {
+  // Ensure the ridge reaches the very right edge.
+  // Without an explicit sample at x=w, the final segment can drop straight to (w, h)
+  // leaving a visible "cut" wedge on some viewport sizes.
+  const step = 18 * dpr;
+  for (let sx = 0; sx < w; sx += step) {
+    const worldX = (camX * parallax) + ((sx - w * 0.5) / (SCALE * dpr)) * 0.9;
+    const n = ridgeNoise((worldX + 1200 * parallax) * freq);
+    const y = baseY - n * ampPx;
+    ctx.lineTo(sx, y);
+  }
+  {
+    const sx = w;
     const worldX = (camX * parallax) + ((sx - w * 0.5) / (SCALE * dpr)) * 0.9;
     const n = ridgeNoise((worldX + 1200 * parallax) * freq);
     const y = baseY - n * ampPx;
@@ -1465,7 +1450,18 @@ function drawForest(
   // Ridge fill
   ctx.beginPath();
   ctx.moveTo(0, h);
+  let lastSx = 0;
   for (let sx = 0; sx <= w; sx += 18 * dpr) {
+    lastSx = sx;
+    const worldX = (camX * parallax) + ((sx - w * 0.5) / (SCALE * dpr)) * 0.85;
+    const n = ridgeNoise((worldX + 999) * freq);
+    const y = baseY - n * amp;
+    ctx.lineTo(sx, y);
+  }
+  // Ensure the ridge reaches the right edge to avoid a visible "cut wedge"
+  // when the step size doesn't land exactly on w.
+  if (lastSx < w) {
+    const sx = w;
     const worldX = (camX * parallax) + ((sx - w * 0.5) / (SCALE * dpr)) * 0.85;
     const n = ridgeNoise((worldX + 999) * freq);
     const y = baseY - n * amp;
@@ -1520,7 +1516,17 @@ function drawMountains(
   ctx.moveTo(0, h);
 
   // Deterministic peaks + parallax camera drift.
-  for (let sx = 0; sx <= w; sx += 24 * dpr) {
+  // Ensure the ridge reaches the very right edge (avoids a visible wedge cut-off).
+  const step = 24 * dpr;
+  for (let sx = 0; sx < w; sx += step) {
+    const worldX = (camX * parallax) + ((sx - w * 0.5) / (SCALE * dpr)) * 0.85;
+    const t = worldX * (0.09 + parallax * 0.03);
+    const peak = ridgeNoise(t);
+    const y = baseY - (52 + peak * 78) * dpr * (0.68 + parallax * 1.35);
+    ctx.lineTo(sx, y);
+  }
+  {
+    const sx = w;
     const worldX = (camX * parallax) + ((sx - w * 0.5) / (SCALE * dpr)) * 0.85;
     const t = worldX * (0.09 + parallax * 0.03);
     const peak = ridgeNoise(t);
@@ -1534,9 +1540,17 @@ function drawMountains(
   ctx.restore();
 }
 
-function drawGround(ctx: CanvasRenderingContext2D, w: number, h: number, track: Track, camX: number, camY: number, dpr: number) {
-  const viewCX = w * 0.33;
-  const viewCY = h * 0.62;
+function drawGround(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  track: Track,
+  camX: number,
+  camY: number,
+  dpr: number,
+  viewCX: number,
+  viewCY: number
+) {
 
   const screenYOfGround = (xWorld: number) => {
     const yWorld = sampleTrackY(track, xWorld);
@@ -1552,7 +1566,15 @@ function drawGround(ctx: CanvasRenderingContext2D, w: number, h: number, track: 
   ctx.fillStyle = dirtGrad;
   ctx.beginPath();
   ctx.moveTo(0, h);
+  let lastSx = 0;
   for (let sx = 0; sx <= w; sx += 4 * dpr) {
+    lastSx = sx;
+    const xWorld = camX + (sx - viewCX) / (SCALE * dpr);
+    ctx.lineTo(sx, screenYOfGround(xWorld));
+  }
+  // Ensure the fill reaches the right edge even when w is not a multiple of the step
+  if (lastSx < w) {
+    const sx = w;
     const xWorld = camX + (sx - viewCX) / (SCALE * dpr);
     ctx.lineTo(sx, screenYOfGround(xWorld));
   }
@@ -1565,11 +1587,19 @@ function drawGround(ctx: CanvasRenderingContext2D, w: number, h: number, track: 
   ctx.lineWidth = 22 * dpr;
   ctx.lineCap = "round";
   ctx.beginPath();
+  let lastSx2 = 0;
   for (let sx = 0; sx <= w; sx += 6 * dpr) {
+    lastSx2 = sx;
     const xWorld = camX + (sx - viewCX) / (SCALE * dpr);
     const y = screenYOfGround(xWorld) + 4 * dpr;
     if (sx === 0) ctx.moveTo(sx, y);
     else ctx.lineTo(sx, y);
+  }
+  if (lastSx2 < w) {
+    const sx = w;
+    const xWorld = camX + (sx - viewCX) / (SCALE * dpr);
+    const y = screenYOfGround(xWorld) + 4 * dpr;
+    ctx.lineTo(sx, y);
   }
   ctx.stroke();
 
@@ -1601,22 +1631,38 @@ function drawGround(ctx: CanvasRenderingContext2D, w: number, h: number, track: 
   ctx.lineWidth = 11 * dpr;
   ctx.lineCap = "round";
   ctx.beginPath();
+  let lastSx3 = 0;
   for (let sx = 0; sx <= w; sx += 5 * dpr) {
+    lastSx3 = sx;
     const xWorld = camX + (sx - viewCX) / (SCALE * dpr);
     const y = screenYOfGround(xWorld);
     if (sx === 0) ctx.moveTo(sx, y);
     else ctx.lineTo(sx, y);
+  }
+  if (lastSx3 < w) {
+    const sx = w;
+    const xWorld = camX + (sx - viewCX) / (SCALE * dpr);
+    const y = screenYOfGround(xWorld);
+    ctx.lineTo(sx, y);
   }
   ctx.stroke();
 
   ctx.strokeStyle = "rgba(255,255,255,0.38)";
   ctx.lineWidth = 3.5 * dpr;
   ctx.beginPath();
+  let lastSx4 = 0;
   for (let sx = 0; sx <= w; sx += 5 * dpr) {
+    lastSx4 = sx;
     const xWorld = camX + (sx - viewCX) / (SCALE * dpr);
     const y = screenYOfGround(xWorld) - 3.5 * dpr;
     if (sx === 0) ctx.moveTo(sx, y);
     else ctx.lineTo(sx, y);
+  }
+  if (lastSx4 < w) {
+    const sx = w;
+    const xWorld = camX + (sx - viewCX) / (SCALE * dpr);
+    const y = screenYOfGround(xWorld) - 3.5 * dpr;
+    ctx.lineTo(sx, y);
   }
   ctx.stroke();
 
@@ -1748,21 +1794,25 @@ function drawJeep(
   dpr: number,
   headId: HeadId,
   headImg: HTMLImageElement | null,
-  headImg2: HTMLImageElement | null
+  headImg2: HTMLImageElement | null,
+  miniMode: boolean
 ) {
   const chassis = car.chassis;
   const p = chassis.getPosition();
   const a = chassis.getAngle();
   const sp = toScreen(p);
 
-  // soft shadow (gives depth; works even without a separate ground projection)
-  ctx.save();
-  ctx.globalAlpha = 0.18;
-  ctx.fillStyle = "#000";
-  ctx.beginPath();
-  ctx.ellipse(sp.x, sp.y + 58 * dpr, 92 * dpr, 18 * dpr, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
+  // soft shadow: looks nice on desktop, but in Mini Apps it can read as a visual bug
+  // (an extra "blob" that doesn't match the terrain perspective), so keep it desktop-only.
+  if (!miniMode) {
+    ctx.save();
+    ctx.globalAlpha = 0.18;
+    ctx.fillStyle = "#000";
+    ctx.beginPath();
+    ctx.ellipse(sp.x, sp.y + 58 * dpr, 92 * dpr, 18 * dpr, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
 
   // wheels
   drawWheel(ctx, toScreen(car.wheel1.getPosition()), car.wheel1.getAngle(), 0.34, dpr);
@@ -1771,7 +1821,14 @@ function drawJeep(
   ctx.save();
   ctx.translate(sp.x, sp.y);
   ctx.rotate(-a);
-  ctx.scale(dpr, dpr);
+  // IMPORTANT: In mini-app, the viewport SCALE tends to be lower than desktop.
+  // Previously the Jeep body was rendered in fixed pixel units (only DPR-scaled),
+  // while wheels used world meters * SCALE. That made wheels look "too small"
+  // in Mini Apps. We scale the body by SCALE relative to a baseline so body
+  // and wheels stay visually consistent.
+  const BODY_BASE_PX_PER_M = 45; // tuned against desktop default (keeps desktop look unchanged)
+  const bodyScale = miniMode ? (SCALE / BODY_BASE_PX_PER_M) : 1;
+  ctx.scale(dpr * bodyScale, dpr * bodyScale);
 
   // Jeep body (shaded)
   ctx.lineWidth = 3.5;
