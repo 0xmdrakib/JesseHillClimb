@@ -100,6 +100,14 @@ a{color:inherit}
   background: var(--sky);
 }
 
+.shellMini.miniVirtualLandscape.landscapeLeft{
+  /* Alternate angle: open landscape to the LEFT */
+  left: 0;
+  top: var(--vvh);
+  transform: rotate(-90deg);
+  transform-origin: left top;
+}
+
 /* When rotated, avoid vh/dvh math inside; use flex instead. */
 .shellMini.miniVirtualLandscape .stage{
   flex: 1;
@@ -702,6 +710,159 @@ canvas{
 }
 
 /* --- Driver selector (top-right) --- */
+
+.topRightTools{
+  pointer-events:auto;
+  position:absolute;
+  top: calc(12px + var(--safe-top));
+  right: calc(12px + var(--safe-right));
+  z-index: 30;
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+
+.miniToolBtn{
+  pointer-events:auto;
+  width:44px;
+  height:44px;
+  border-radius:999px;
+  border:1px solid rgba(0,0,0,.12);
+  background: rgba(255,255,255,.82);
+  box-shadow:0 16px 30px rgba(0,0,0,.12);
+  display:grid;
+  place-items:center;
+  cursor:pointer;
+  user-select:none;
+}
+
+.miniToolBtn svg{
+  width:20px;
+  height:20px;
+}
+
+.driverBtn.driverBtnInTools{
+  position: static;
+  top: auto;
+  right: auto;
+  z-index: auto;
+}
+
+.tipBackdrop{
+  pointer-events:auto;
+  position:absolute;
+  inset:0;
+  background: rgba(245,251,255,.55);
+  backdrop-filter: blur(6px);
+  display:flex;
+  justify-content:flex-end;
+  align-items:flex-start;
+  padding:
+    calc(68px + var(--safe-top))
+    calc(12px + var(--safe-right))
+    calc(12px + var(--safe-bottom))
+    calc(12px + var(--safe-left));
+}
+
+.tipCard{
+  width:min(360px, calc(100% - 24px));
+  background: rgba(255,255,255,.92);
+  border: 1px solid rgba(0,0,0,.10);
+  border-radius:18px;
+  box-shadow: 0 30px 80px rgba(0,0,0,.18);
+  padding:14px 14px 12px;
+}
+
+.tipTop{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:10px;
+}
+
+.tipTitle{
+  font-size:16px;
+  font-weight:1000;
+}
+
+.tipClose{
+  width:36px;
+  height:36px;
+  border-radius:999px;
+  border:1px solid rgba(0,0,0,.12);
+  background: rgba(255,255,255,.85);
+  display:grid;
+  place-items:center;
+  cursor:pointer;
+}
+
+.tipMeta{
+  font-size:13px;
+  opacity:.85;
+  margin-bottom:12px;
+}
+
+.tipGrid{
+  display:grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap:10px;
+  margin-bottom:12px;
+}
+
+.tipAmt{
+  border:1px solid rgba(0,0,0,.12);
+  background: rgba(255,255,255,.86);
+  border-radius:14px;
+  padding:10px 10px;
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  cursor:pointer;
+}
+
+.tipAmt strong{ font-size:14px; }
+.tipAmt span{ font-size:12px; opacity:.8; }
+
+.tipAmt.tipAmtActive{
+  outline: 2px solid rgba(36,152,255,.35);
+  border-color: rgba(36,152,255,.45);
+}
+
+.tipRow{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin-bottom:10px;
+}
+
+.tipInput{
+  flex:1;
+  height:40px;
+  border-radius:12px;
+  border:1px solid rgba(0,0,0,.12);
+  background: rgba(255,255,255,.9);
+  padding:0 12px;
+  font-size:14px;
+}
+
+.tipSend{
+  width:100%;
+  height:44px;
+  border-radius:14px;
+  border:1px solid rgba(0,0,0,.12);
+  background: linear-gradient(180deg, rgba(255,227,128,.95), rgba(255,200,74,.95));
+  box-shadow: 0 16px 30px rgba(0,0,0,.12);
+  font-weight:1000;
+  cursor:pointer;
+}
+
+.tipErr{
+  margin-top:10px;
+  font-size:12px;
+  color:#9a1a1a;
+  overflow-wrap:anywhere;
+}
 .driverBtn{
   pointer-events:auto;
   position:absolute;
