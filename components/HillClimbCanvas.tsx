@@ -1151,8 +1151,11 @@ export const HillClimbCanvas = forwardRef<
     // In Mini Apps we bias the camera a bit more forward to feel "ultra wide"
     // (more upcoming terrain visible) without changing gameplay scale.
     const isMini = miniModeRef.current;
-    const lookMul = isMini ? 0.78 : 0.6;
-    const lookMax = isMini ? 10 : 8;
+    // Mini-app camera tuning:
+    // - Keep some look-ahead for a wider forward view
+    // - But cap it lower than desktop so the car doesn't get pushed under left-side UI
+    const lookMul = isMini ? 0.55 : 0.6;
+    const lookMax = isMini ? 6 : 8;
     const lookAhead = Math.max(0, Math.min(lookMax, v.x * lookMul));
     const targetX = p.x + lookAhead;
 
@@ -1175,8 +1178,8 @@ export const HillClimbCanvas = forwardRef<
     const camY = camRef.current.y;
 
     // screen center: HCR keeps car left-ish, so you see upcoming terrain
-    // Mini Apps: nudge a bit further left for extra forward visibility.
-    const viewCX = w * (miniModeRef.current ? 0.29 : 0.33);
+    // Mini Apps: slight left bias, but not so much that the car can slide under left-side UI.
+    const viewCX = w * (miniModeRef.current ? 0.32 : 0.33);
     const viewCY = h * 0.62;
 
     const toScreen = (v: planck.Vec2) => ({
@@ -1200,7 +1203,9 @@ export const HillClimbCanvas = forwardRef<
     drawForest(ctx, w, h, camX, dpr, 0.52, "#6aa886", 0.72);
 
     // ground (dirt + grass)
-    drawGround(ctx, w, h, track, camX, camY, dpr);
+    // IMPORTANT: must share the same viewCX/viewCY as the car, otherwise the road can
+    // appear shifted relative to physics (wheels look like they're floating on slopes).
+    drawGround(ctx, w, h, track, camX, camY, dpr, viewCX, viewCY);
 
     // pickups
     for (const p of pickupsRef.current) {
@@ -1535,9 +1540,17 @@ function drawMountains(
   ctx.restore();
 }
 
-function drawGround(ctx: CanvasRenderingContext2D, w: number, h: number, track: Track, camX: number, camY: number, dpr: number) {
-  const viewCX = w * 0.33;
-  const viewCY = h * 0.62;
+function drawGround(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  track: Track,
+  camX: number,
+  camY: number,
+  dpr: number,
+  viewCX: number,
+  viewCY: number
+) {
 
   const screenYOfGround = (xWorld: number) => {
     const yWorld = sampleTrackY(track, xWorld);
@@ -1789,14 +1802,17 @@ function drawJeep(
   const a = chassis.getAngle();
   const sp = toScreen(p);
 
-  // soft shadow (gives depth; works even without a separate ground projection)
-  ctx.save();
-  ctx.globalAlpha = 0.18;
-  ctx.fillStyle = "#000";
-  ctx.beginPath();
-  ctx.ellipse(sp.x, sp.y + 58 * dpr, 92 * dpr, 18 * dpr, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
+  // soft shadow: looks nice on desktop, but in Mini Apps it can read as a visual bug
+  // (an extra "blob" that doesn't match the terrain perspective), so keep it desktop-only.
+  if (!miniMode) {
+    ctx.save();
+    ctx.globalAlpha = 0.18;
+    ctx.fillStyle = "#000";
+    ctx.beginPath();
+    ctx.ellipse(sp.x, sp.y + 58 * dpr, 92 * dpr, 18 * dpr, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
 
   // wheels
   drawWheel(ctx, toScreen(car.wheel1.getPosition()), car.wheel1.getAngle(), 0.34, dpr);
