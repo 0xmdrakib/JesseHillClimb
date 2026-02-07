@@ -12,8 +12,9 @@ import {
   readBestMeters,
   submitScoreMeters,
   getNextTokenId,
-  mintRunNft,,
-  sendEthTip} from "@/lib/onchain";
+  mintRunNft,
+  sendEthTip,
+} from "@/lib/onchain";
 
 // Browser wallets: don't assume MetaMask. Prefer "any" (EIP-6963 will still pick a sensible default).
 const DEFAULT_INJECTED_WALLET = "any" as const;
