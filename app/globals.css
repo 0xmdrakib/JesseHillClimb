@@ -87,17 +87,25 @@ a{color:inherit}
    IMPORTANT: do NOT scale the container; scale only UI pieces (HUD/controls) and the render scale. */
 .shellMini.miniVirtualLandscape{
   position: fixed;
-  /* Flip rotation direction so landscape opens to the LEFT in Mini App portrait webviews. */
-  left: var(--vvw);
-  top: 0;
+  /* Default: landscape opens to the RIGHT in Mini App portrait webviews */
+  left: 0;
+  top: var(--vvh);
   width: var(--lvw);       /* portrait height -> landscape width */
   height: var(--lvh);      /* portrait width  -> landscape height */
-  transform: rotate(90deg);
+  transform: rotate(-90deg);
   transform-origin: left top;
   min-height: 0;
   display: flex;
   flex-direction: column;
   background: var(--sky);
+}
+
+/* Optional: user can flip to LEFT landscape */
+.shellMini.miniVirtualLandscape.miniLandscapeLeft{
+  left: var(--vvw);
+  top: 0;
+  transform: rotate(90deg);
+  transform-origin: left top;
 }
 
 /* When rotated, avoid vh/dvh math inside; use flex instead. */
@@ -131,12 +139,6 @@ a{color:inherit}
 .headerMini{
   padding-top: calc(14px + var(--safe-top));
 }
-
-/* Remove the top header bar entirely (no UI + no reserved space). */
-.header,
-.headerMini{
-  display:none !important;
-}
 .title{
   font-weight:800;
   letter-spacing:.2px;
@@ -167,17 +169,12 @@ a{color:inherit}
   color:white;
   box-shadow: 0 10px 25px rgba(0,0,0,.15);
 }
-
-/* Mini App: reduce HUD shadow blur so it doesn't look like a tiny tab near the edge when clipped by overflow */
-.shellMini .hudCard{
-  box-shadow: 0 10px 20px rgba(0,0,0,.12);
-}
 .btn:active{transform: translateY(1px)}
 .stage{
   position:relative;
   height: min(640px, 70vh);
   background: var(--sky);
-  border-top:0;
+  border-top:1px solid rgba(0,0,0,.08);
   touch-action: none;
 }
 
@@ -206,7 +203,7 @@ a{color:inherit}
 .stagePortrait canvas{ height: 100%; }
 .shellMini .stage{
   /* Mini Apps: fill the usable viewport; dvh behaves better with mobile browser UI */
-  height: 100dvh;
+  height: calc(100dvh - 74px - var(--safe-top));
 }
 canvas{
   width:100%;
@@ -222,7 +219,6 @@ canvas{
   position:absolute;
   top: calc(12px + var(--safe-top));
   left: calc(12px + var(--safe-left));
-  z-index: 20;
   display:flex;
   flex-direction:column;
   align-items:flex-start;
@@ -270,7 +266,6 @@ canvas{
   position:absolute;
   top: calc(12px + var(--safe-top));
   right: calc(12px + var(--safe-right));
-  z-index: 30;
   width:54px;
   height:54px;
   border-radius:999px;
@@ -291,7 +286,6 @@ canvas{
   position:absolute;
   left:0; right:0;
   bottom:12px;
-  z-index: 15;
   display:flex;
   justify-content:space-between;
   padding:0 12px;
@@ -338,7 +332,6 @@ canvas{
 .gauges{
   position:absolute;
   bottom:16px;
-  z-index: 15;
   left:50%;
   transform:translateX(-50%);
   display:flex;
@@ -381,11 +374,10 @@ canvas{
 .needle{
   position:absolute;
   width:3px;
-  height:40%;
+  height:48px;
   background:#c01515;
   left:50%;
-  /* Keep the pivot exactly on the gauge center (matches .gaugeCap at 50%/50%) */
-  top: calc(50% - 40%);
+  top:22px;
   transform-origin: bottom center;
   border-radius:3px;
   box-shadow:0 2px 6px rgba(0,0,0,.25);
@@ -607,7 +599,6 @@ canvas{
   left:50%;
   top: calc(12px + var(--safe-top));
   transform: translateX(-50%);
-  z-index: 40;
   background: rgba(10,20,30,.86);
   color:white;
   padding:10px 14px;
@@ -621,18 +612,8 @@ canvas{
 .endScreen{
   position:absolute;
   inset:0;
-  /* Keep end screen ABOVE controls/gauges and usable even when content is long. */
-  z-index: 60;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  padding:
-    calc(16px + var(--safe-top))
-    calc(16px + var(--safe-right))
-    calc(16px + var(--safe-bottom))
-    calc(16px + var(--safe-left));
-  overflow:auto;
-  overscroll-behavior: contain;
+  display:grid;
+  place-items:center;
   background: rgba(245,251,255,.55);
   backdrop-filter: blur(6px);
 }
@@ -644,10 +625,6 @@ canvas{
   box-shadow: 0 30px 80px rgba(0,0,0,.18);
   padding:18px 16px;
   text-align:center;
-  /* If the card becomes tall, scroll inside the card instead of going under UI. */
-  max-height: calc(100% - 8px);
-  overflow:auto;
-  -webkit-overflow-scrolling: touch;
 }
 .endTitle{
   font-size:26px;
@@ -702,12 +679,170 @@ canvas{
 }
 
 /* --- Driver selector (top-right) --- */
-.driverBtn{
+
+/* Top-right tool cluster (tip / rotate / driver) */
+.topRightTools{
   pointer-events:auto;
   position:absolute;
   top: calc(12px + var(--safe-top));
   right: calc(12px + var(--safe-right));
   z-index: 30;
+  display:flex;
+  align-items:center;
+  gap: 10px;
+}
+
+/* Driver button inside tool cluster should not position itself */
+.topRightTools .driverBtn{
+  position: static;
+  top:auto; right:auto;
+}
+
+/* Small icon buttons used in the tool cluster */
+.toolIconBtn{
+  pointer-events:auto;
+  height:44px;
+  width:44px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  border-radius:999px;
+  border:1px solid rgba(0,0,0,.12);
+  background: rgba(255,255,255,.82);
+  box-shadow:0 16px 30px rgba(0,0,0,.12);
+  cursor:pointer;
+  user-select:none;
+}
+
+/* Tip modal */
+.tipBackdrop{
+  position:absolute;
+  inset:0;
+  z-index: 80;
+  background: rgba(0,0,0,.18);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding: 16px;
+}
+
+.tipCard{
+  width: min(420px, 92vw);
+  border-radius: 18px;
+  background: rgba(255,255,255,.92);
+  border:1px solid rgba(0,0,0,.10);
+  box-shadow:0 26px 60px rgba(0,0,0,.22);
+  padding: 14px;
+}
+
+.tipTop{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.tipTitle{
+  font-weight: 800;
+  font-size: 16px;
+}
+
+.tipPrice{
+  font-size: 13px;
+  opacity: .75;
+  margin-top: 2px;
+}
+
+.tipGrid{
+  display:grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin: 10px 0 12px;
+}
+
+.tipAmtBtn{
+  border-radius: 14px;
+  border:1px solid rgba(0,0,0,.12);
+  background: rgba(255,255,255,.85);
+  padding: 10px 10px;
+  cursor:pointer;
+  text-align:center;
+}
+
+.tipAmtUsd{
+  font-weight: 800;
+  font-size: 15px;
+}
+
+.tipAmtEth{
+  font-size: 12px;
+  opacity: .70;
+  margin-top: 2px;
+}
+
+.tipCustomRow{
+  display:flex;
+  gap: 10px;
+  align-items:flex-end;
+  margin-bottom: 12px;
+}
+
+.tipField{
+  flex:1;
+}
+
+.tipLabel{
+  font-size: 12px;
+  opacity:.75;
+  margin-bottom: 4px;
+}
+
+.tipInput{
+  width:100%;
+  height:42px;
+  border-radius: 12px;
+  border:1px solid rgba(0,0,0,.14);
+  background: rgba(255,255,255,.85);
+  padding: 0 12px;
+  font-size: 14px;
+  outline: none;
+}
+
+.tipActions{
+  display:flex;
+  gap: 10px;
+  justify-content:flex-end;
+  align-items:center;
+}
+
+.tipSendBtn{
+  height:42px;
+  padding:0 14px;
+  border-radius: 12px;
+  border:1px solid rgba(0,0,0,.14);
+  background: rgba(0,0,0,.88);
+  color:#fff;
+  cursor:pointer;
+}
+
+.tipSendBtn:disabled{
+  opacity:.55;
+  cursor: default;
+}
+
+.tipStatus{
+  font-size: 12px;
+  opacity:.80;
+  margin-top: 8px;
+  word-break: break-word;
+}
+
+.driverBtn{
+  pointer-events:auto;
+  position:absolute;
+  top: calc(12px + var(--safe-top));
+  right: calc(12px + var(--safe-right));
   height:44px;
   padding:0 12px;
   border-radius:999px;
@@ -826,7 +961,7 @@ canvas{
 
 /* Mini App layout tightening for phones */
 .shellMini .hud{
-  top: calc(16px + var(--safe-top));
+  top: calc(12px + var(--safe-top));
   left: calc(12px + var(--safe-left));
   right: calc(12px + var(--safe-right));
 }
@@ -890,25 +1025,10 @@ canvas{
   opacity:.75;
   margin-bottom:8px;
 }
-.endOnchainMeta{font-size:12px; font-weight:800; opacity:.85; display:flex; flex-direction:column; gap:4px; min-width:0; overflow-wrap:anywhere; word-break:break-word;}
+.endOnchainMeta{font-size:12px; font-weight:800; opacity:.85; display:flex; flex-direction:column; gap:4px;}
 .endOnchainLine{line-height:1.25;}
 .endOnchainWarn{color:#9b5d00; opacity:1;}
-.endOnchainErr{
-  color:#9a1a1a;
-  opacity:1;
-  /* Clamp very long revert/debug output so it doesn't blow up the end card. */
-  font-size: 11px;
-  line-height: 1.25;
-  overflow: hidden;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-  /* Modern/WebKit multi-line truncation + a fallback max-height. */
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-  line-clamp: 3;
-  max-height: calc(1.25em * 3);
-}
+.endOnchainErr{color:#9a1a1a; opacity:1;}
 .endOnchainOk{color:#0a5d2a; opacity:1;}
 .endOnchainBtns{margin-top:10px; display:flex; gap:10px;}
 .endOnchainBtns .actionBtn{flex:1; justify-content:center;}
