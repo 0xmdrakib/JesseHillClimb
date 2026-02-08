@@ -4,6 +4,7 @@ import {
   createPublicClient,
   createWalletClient,
   custom,
+  encodeFunctionData,
   http,
   parseEther,
   type Address,
@@ -19,9 +20,57 @@ import {
   type EthereumProviderOptions,
 } from "@/lib/wallet";
 import { scoreboardAbi, runNftAbi } from "@/lib/onchainAbi";
+import {
+  supportsPaymasterService,
+  sendSponsoredCallsAndGetTxHash,
+} from "@/lib/gasless";
 
 const BASE_CHAIN_ID = 8453;
 const BASE_CHAIN_ID_HEX = "0x2105";
+
+function isUserRejected(e: unknown): boolean {
+  const err = e as any;
+  const code = err?.code ?? err?.data?.code ?? err?.data?.originalError?.code;
+  if (code === 4001) return true; // EIP-1193 userRejectedRequest
+  const msg = String(err?.message ?? e);
+  return /user rejected|rejected the request|request rejected|cancelled|canceled/i.test(msg);
+}
+
+async function trySponsoredWriteContract(params: {
+  provider: Eip1193Provider;
+  from: Address;
+  to: Address;
+  abi: any;
+  functionName: string;
+  args: any[];
+}): Promise<`0x${string}` | null> {
+  // Only attempt gas sponsorship when the wallet reports support.
+  const supported = await supportsPaymasterService({
+    provider: params.provider,
+    from: params.from as `0x${string}`,
+    chainIdHex: BASE_CHAIN_ID_HEX,
+  });
+  if (!supported) return null;
+
+  try {
+    const data = encodeFunctionData({
+      abi: params.abi,
+      functionName: params.functionName as any,
+      args: params.args as any,
+    }) as `0x${string}`;
+
+    return await sendSponsoredCallsAndGetTxHash({
+      provider: params.provider,
+      chainIdHex: BASE_CHAIN_ID_HEX,
+      from: params.from as `0x${string}`,
+      calls: [{ to: params.to as `0x${string}`, value: "0x0", data }],
+    });
+  } catch (e) {
+    // Avoid double-prompts: if the user rejects the sponsored prompt, do not fall back.
+    if (isUserRejected(e)) throw e;
+    return null;
+  }
+}
 
 function getBaseRpcUrl() {
   const env = (process.env.NEXT_PUBLIC_BASE_RPC_URL ?? "").trim();
@@ -154,8 +203,19 @@ export async function submitScoreMeters(
   const { provider, address } = wallet ?? (await getOrConnectWallet());
   await ensureBaseMainnet(provider);
 
-  const client = getWalletClient(provider, address);
   const m = BigInt(Math.max(0, Math.floor(meters)));
+
+  const sponsored = await trySponsoredWriteContract({
+    provider,
+    from: address,
+    to: scoreboardAddress as Address,
+    abi: scoreboardAbi,
+    functionName: "submitScore",
+    args: [m],
+  });
+  if (sponsored) return String(sponsored);
+
+  const client = getWalletClient(provider, address);
 
   const hash = await client.writeContract({
     address: scoreboardAddress as Address,
@@ -188,10 +248,20 @@ export async function mintRunNft(
   const { provider, address } = wallet ?? (await getOrConnectWallet());
   await ensureBaseMainnet(provider);
 
-  const client = getWalletClient(provider, address);
-
   const m = BigInt(Math.max(0, Math.floor(meters)));
   const did = Math.max(0, Math.min(255, Math.floor(driverId)));
+
+  const sponsored = await trySponsoredWriteContract({
+    provider,
+    from: address,
+    to: runNftAddress as Address,
+    abi: runNftAbi,
+    functionName: "mintRun",
+    args: [m, did, tokenUri],
+  });
+  if (sponsored) return String(sponsored);
+
+  const client = getWalletClient(provider, address);
 
   const hash = await client.writeContract({
     address: runNftAddress as Address,
