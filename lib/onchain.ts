@@ -66,9 +66,13 @@ async function trySponsoredWriteContract(params: {
       calls: [{ to: params.to as `0x${string}`, value: "0x0", data }],
     });
   } catch (e) {
-    // Avoid double-prompts: if the user rejects the sponsored prompt, do not fall back.
+    // Ensure *one* wallet prompt total:
+    // - If the wallet supports gasless, we do NOT fall back to a second onchain prompt if sponsorship fails.
+    // - If the user rejects, we surface that rejection.
     if (isUserRejected(e)) throw e;
-    return null;
+
+    const msg = (e as any)?.message ? String((e as any).message) : String(e);
+    throw new Error(`Gasless transaction failed: ${msg}`);
   }
 }
 
