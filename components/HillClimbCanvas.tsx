@@ -439,7 +439,7 @@ export const HillClimbCanvas = forwardRef<
     ground.createFixture(planck.Edge(Vec2(TRACK_X0 - 200, -18), Vec2(TRACK_X1 + 200, -18)), { friction: 0.9 });
 
     // Jeep chassis (stability-first: lower COM so GAS doesn't insta-flip)
-    const spawnX = 0;
+    const spawnX = 50;
     const groundY0 = sampleTrackY(track, spawnX);
     // Spawn a bit closer to ground to avoid the "drop + snap" that can kick the car.
     const spawnY = groundY0 + 1.55;
