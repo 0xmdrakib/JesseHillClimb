@@ -305,6 +305,8 @@ export const HillClimbCanvas = forwardRef<
   const pickupsRef = useRef<Pickup[]>([]);
   const trackRef = useRef<Track>(buildTrack());
   const seedRef = useRef<number>(1337);
+  // Run-relative origin so the distance meter starts at 0m even if we spawn at a non-zero world X.
+  const startXRef = useRef(0);
 
   // Render time (seconds). Used for subtle pickup bob + background drift.
   const timeRef = useRef(0);
@@ -439,7 +441,9 @@ export const HillClimbCanvas = forwardRef<
     ground.createFixture(planck.Edge(Vec2(TRACK_X0 - 200, -18), Vec2(TRACK_X1 + 200, -18)), { friction: 0.9 });
 
     // Jeep chassis (stability-first: lower COM so GAS doesn't insta-flip)
-    const spawnX = 0;
+    // Spawn a bit earlier on the track so the opening terrain is more playable.
+    const spawnX = -35;
+    startXRef.current = spawnX;
     const groundY0 = sampleTrackY(track, spawnX);
     // Spawn a bit closer to ground to avoid the "drop + snap" that can kick the car.
     const spawnY = groundY0 + 1.55;
@@ -958,7 +962,10 @@ export const HillClimbCanvas = forwardRef<
     (world as any).clearForces?.();
 
     // distance scoring (only forward progress counts)
-    const x = car.chassis.getPosition().x;    s.distanceM = Math.max(s.distanceM, x);
+    // Use run-relative distance so the meter starts at 0m even if spawnX is non-zero.
+    const x = car.chassis.getPosition().x;
+    const runX = x - startXRef.current;
+    s.distanceM = Math.max(s.distanceM, runX);
     // Best score is external (onchain) and is not updated locally.
     s.bestM = bestRef.current;
 
