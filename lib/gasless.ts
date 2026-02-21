@@ -1,6 +1,7 @@
 "use client";
 
 import type { Eip1193Provider } from "@/lib/wallet";
+import { appendErc8021Suffix } from "@/lib/builderCodes";
 
 type JsonRpcError = { code?: number; message?: string; data?: any };
 
@@ -119,7 +120,7 @@ export async function sendSponsoredCallsAndGetTxHash(params: {
     provider: params.provider,
     chainIdHex: params.chainIdHex,
     from: params.from,
-    calls: params.calls,
+    calls: params.calls.map((c) => ({ ...c, data: appendErc8021Suffix(c.data) })),
     paymasterProxyUrl,
   });
 
