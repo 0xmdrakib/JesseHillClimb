@@ -24,6 +24,7 @@ import {
   supportsPaymasterService,
   sendSponsoredCallsAndGetTxHash,
 } from "@/lib/gasless";
+import { appendErc8021Suffix, ERC8021_DATA_SUFFIX } from "@/lib/builderCodes";
 
 const BASE_CHAIN_ID = 8453;
 const BASE_CHAIN_ID_HEX = "0x2105";
@@ -53,11 +54,11 @@ async function trySponsoredWriteContract(params: {
   if (!supported) return null;
 
   try {
-    const data = encodeFunctionData({
+    const data = appendErc8021Suffix(encodeFunctionData({
       abi: params.abi,
       functionName: params.functionName as any,
       args: params.args as any,
-    }) as `0x${string}`;
+    }) as `0x${string}`);
 
     return await sendSponsoredCallsAndGetTxHash({
       provider: params.provider,
@@ -221,11 +222,17 @@ export async function submitScoreMeters(
 
   const client = getWalletClient(provider, address);
 
-  const hash = await client.writeContract({
-    address: scoreboardAddress as Address,
-    abi: scoreboardAbi,
-    functionName: "submitScore",
-    args: [m],
+  const data = appendErc8021Suffix(
+    encodeFunctionData({
+      abi: scoreboardAbi,
+      functionName: "submitScore",
+      args: [m],
+    }) as `0x${string}`,
+  );
+
+  const hash = await client.sendTransaction({
+    to: scoreboardAddress as Address,
+    data,
   });
 
   return String(hash);
@@ -267,11 +274,17 @@ export async function mintRunNft(
 
   const client = getWalletClient(provider, address);
 
-  const hash = await client.writeContract({
-    address: runNftAddress as Address,
-    abi: runNftAbi,
-    functionName: "mintRun",
-    args: [m, did, tokenUri],
+  const data = appendErc8021Suffix(
+    encodeFunctionData({
+      abi: runNftAbi,
+      functionName: "mintRun",
+      args: [m, did, tokenUri],
+    }) as `0x${string}`,
+  );
+
+  const hash = await client.sendTransaction({
+    to: runNftAddress as Address,
+    data,
   });
 
   return String(hash);
@@ -290,6 +303,7 @@ export async function sendEthTip(
   const hash = await client.sendTransaction({
     to: to as Address,
     value: parseEther(amountEth),
+    ...(ERC8021_DATA_SUFFIX ? { data: appendErc8021Suffix("0x") } : {}),
   });
 
   return String(hash);
