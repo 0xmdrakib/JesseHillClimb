@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { HeadPicker } from "@/components/HeadPicker";
 import { loadHead, saveHead, HeadId, HEADS } from "@/lib/heads";
 import { HillClimbCanvas, HillClimbHandle, HillClimbState } from "@/components/HillClimbCanvas";
@@ -19,6 +19,37 @@ import {
 // Browser wallets: don't assume MetaMask. Prefer "any" (EIP-6963 will still pick a sensible default).
 const DEFAULT_INJECTED_WALLET = "any" as const;
 const LAST_WALLET_KEY = "jhc_last_wallet_id_v1";
+
+
+const useClientLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
+
+function getViewportBox() {
+  if (typeof window === "undefined") {
+    return { width: 0, height: 0, shortEdge: 0, longEdge: 0 };
+  }
+
+  const vv = (window as any).visualViewport as VisualViewport | undefined;
+  const width = vv?.width ?? window.innerWidth;
+  const height = vv?.height ?? window.innerHeight;
+  const shortEdge = Math.min(width, height);
+  const longEdge = Math.max(width, height);
+
+  return { width, height, shortEdge, longEdge };
+}
+
+function isLikelyPhoneViewport() {
+  if (typeof window === "undefined") return false;
+
+  const { shortEdge, longEdge } = getViewportBox();
+  const nav = navigator as Navigator & { userAgentData?: { mobile?: boolean } };
+  const ua = nav.userAgent || "";
+
+  const uaMobile = Boolean(nav.userAgentData?.mobile) || /android|iphone|ipod|mobile|iemobile|opera mini/i.test(ua);
+  const coarse = window.matchMedia?.("(pointer: coarse)")?.matches ?? false;
+  const noHover = window.matchMedia?.("(hover: none)")?.matches ?? false;
+
+  return shortEdge > 0 && shortEdge <= 520 && longEdge <= 1100 && (uaMobile || (coarse && noHover));
+}
 
 function clamp01(n: number) {
   return Math.max(0, Math.min(1, n));
@@ -196,6 +227,7 @@ export default function Page() {
   const [boostHeld, setBoostHeld] = useState(false);
 
   const [mini, setMini] = useState<{ isMini: boolean; fid: number | null }>({ isMini: false, fid: null });
+  const [phoneViewport, setPhoneViewport] = useState(false);
 
   // Mini App: allow user to flip virtual-landscape direction (default = current)
   const [landscapeSide, setLandscapeSide] = useState<"right" | "left">("right");
@@ -261,26 +293,26 @@ export default function Page() {
     })();
   }, []);
 
-  // Orientation detection (used for Mini App virtual landscape)
-  useEffect(() => {
+  // Phone viewport/orientation detection (drives immediate immersive mobile layout)
+  useClientLayoutEffect(() => {
     if (typeof window === "undefined") return;
 
     const vv = (window as any).visualViewport as VisualViewport | undefined;
 
-    // Ratio-based check with hysteresis to avoid UI blinking.
-    let last: boolean | null = null;
+    // Ratio-based check with hysteresis to avoid UI blinking near square viewports.
+    let lastPortrait: boolean | null = null;
 
     const compute = () => {
-      const w = vv?.width ?? window.innerWidth;
-      const h = vv?.height ?? window.innerHeight;
+      const { width: w, height: h } = getViewportBox();
 
-      const next =
+      const nextPortrait =
         h > w * 1.08 ? true :
         w > h * 1.08 ? false :
-        (last ?? (h >= w));
+        (lastPortrait ?? (h >= w));
 
-      last = next;
-      setIsPortrait(next);
+      lastPortrait = nextPortrait;
+      setIsPortrait(nextPortrait);
+      setPhoneViewport(isLikelyPhoneViewport());
     };
 
     let raf = 0;
@@ -289,7 +321,7 @@ export default function Page() {
       raf = requestAnimationFrame(compute);
     };
 
-    on();
+    compute();
     vv?.addEventListener?.("resize", on);
     vv?.addEventListener?.("scroll", on);
     window.addEventListener("resize", on);
@@ -348,20 +380,22 @@ export default function Page() {
     };
   }, [tipOpen]);
 
-  // Mini App background: match the stage sky so we never show a 1px "gap" stripe on the right.
+  const immersiveMobileUi = mini.isMini || phoneViewport;
+
+  // Immersive mobile background: match the stage sky so we never show a 1px "gap" stripe on the right.
   useEffect(() => {
-    if (!mini.isMini) return;
+    if (!immersiveMobileUi) return;
     document.body.classList.add("miniBody");
     document.documentElement.classList.add("miniHtml");
     return () => {
       document.body.classList.remove("miniBody");
       document.documentElement.classList.remove("miniHtml");
     };
-  }, [mini.isMini]);
+  }, [immersiveMobileUi]);
 
-  // Mini App sizing helpers (visualViewport-driven, also computes "landscape" swapped dims)
-  useEffect(() => {
-    if (!mini.isMini) return;
+  // Immersive mobile sizing helpers (visualViewport-driven, also computes "landscape" swapped dims)
+  useClientLayoutEffect(() => {
+    if (!immersiveMobileUi) return;
 
     const vv = (window as any).visualViewport as VisualViewport | undefined;
     const root = document.documentElement;
@@ -412,7 +446,7 @@ export default function Page() {
       vv?.removeEventListener?.("scroll", update);
       window.removeEventListener("resize", update);
     };
-  }, [mini.isMini]);
+  }, [immersiveMobileUi]);
 
   // Best-effort: on first user gesture in Mini App, try to go fullscreen + lock to landscape.
   useEffect(() => {
@@ -456,7 +490,7 @@ export default function Page() {
     };
   }, [mini.isMini]);
 
-  const miniVirtualLandscape = mini.isMini && isPortrait;
+  const virtualLandscape = immersiveMobileUi && isPortrait;
 
   // Pause automatically when the app is backgrounded.
   useEffect(() => {
@@ -751,16 +785,16 @@ export default function Page() {
   const beatOnchainBest = isEnd && Math.floor(state.distanceM) > Math.floor(bestOnchainM);
 
   return (
-    <main className={"main " + (mini.isMini ? "mainMini" : "")}>
+    <main className={"main " + (immersiveMobileUi ? "mainMini" : "")}>
       <div
         className={
           "shell " +
-          (mini.isMini ? "shellMini" : "") +
-          (miniVirtualLandscape ? " miniVirtualLandscape" : "") +
-          (miniVirtualLandscape && landscapeSide === "left" ? " landscapeLeft" : "")
+          (immersiveMobileUi ? "shellMini" : "") +
+          (virtualLandscape ? " miniVirtualLandscape" : "") +
+          (virtualLandscape && landscapeSide === "left" ? " landscapeLeft" : "")
         }
       >
-        <div className={"header " + (mini.isMini ? "headerMini" : "")}>
+        <div className={"header " + (immersiveMobileUi ? "headerMini" : "")}>
           <div>
             <div className="titleRow">
               <img className="brandLogo" src="/icon.png" alt="" />
@@ -789,7 +823,7 @@ export default function Page() {
               }}
               headId={head}
               paused={paused}
-              miniMode={mini.isMini}
+              miniMode={immersiveMobileUi}
               seed={seed}
               bestM={bestOnchainM}
               onState={setState}
@@ -829,7 +863,7 @@ export default function Page() {
             {/* Driver button (top-right) */}
             
             <div className="topRightTools">
-              {miniVirtualLandscape ? (
+              {virtualLandscape ? (
                 <button
                   type="button"
                   className="miniToolBtn"
