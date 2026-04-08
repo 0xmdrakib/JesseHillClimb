@@ -1,4 +1,4 @@
-Just lunched: Jesse Hill Climb 🚗⛰️ — a physics hill-climb game built as a https://x.com/base and https://x.com/farcaster_xyz Mini App, and this is my 9th Mini app.
+Just lunched: Jesse Hill Climb 🚗⛰️ — a physics hill-climb game built as a https://x.com/base and https://x.com/farcaster_xyz Mini App.
 
 • Play game and Swap driver heads anytime between @jessepollak and @brian_armstrong
 • And you can save the moment before crash in game by minting a NFT
