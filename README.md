@@ -9,6 +9,7 @@ How to play:
 • Hold GAS to climb
 • Use BRAKE to control rotation
 • Watch fuel + collect coins
+• You can rotate 180° in mobile
 Goal: beat your best meters.
 
 Onchain features (Base):
