@@ -21,4 +21,4 @@ Customization + UX:
 • Mini-app / mobile / desktop friendly layout + smooth controls
 • Also work in web 
 
-i hope base community will love this❤️
+I hope base community will love this❤️
