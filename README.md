@@ -1,9 +1,9 @@
-Just lunched: Jesse Hill Climb 🚗⛰️ — a physics hill-climb game built as a https://x.com/base and https://x.com/farcaster_xyz Mini App.
+Just lunched: Jesse Hill Climb 🚗⛰️ — A physics hill-climb game built as a https://x.com/base Mini App & web app.
 
 • Play game and Swap driver heads anytime between @jessepollak and @brian_armstrong
 • And you can save the moment before crash in game by minting a NFT
 
-Play iside mini app: https://jessehillclimb.online
+Play this inside base app or in web: https://jessehillclimb.online
 
 How to play:
 • Hold GAS to climb
@@ -18,10 +18,7 @@ Onchain features (Base):
 
 Customization + UX:
 • Swap driver heads anytime
-• Mini-app friendly layout + smooth controls
+• Mini-app / mobile / desktop friendly layout + smooth controls
 • Also work in web 
-
-Tip:
-• You can Tip me to support my work in ETH with a live USD→ETH preview. (click the gift icon to tip)
 
 i hope base community will love this❤️
