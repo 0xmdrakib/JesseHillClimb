@@ -57,15 +57,56 @@ async function discoverEip6963Providers(timeoutMs = 250): Promise<EIP6963Provide
   return out;
 }
 
-function dedupeByProviderRef<T extends { provider: Eip1193Provider }>(arr: T[]): T[] {
-  const seen = new Set<any>();
-  const out: T[] = [];
-  for (const it of arr) {
-    if (!it?.provider) continue;
-    if (seen.has(it.provider as any)) continue;
-    seen.add(it.provider as any);
-    out.push(it);
+function compactWalletKey(value: string) {
+  return String(value ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "")
+    .trim();
+}
+
+function providerFlagKey(provider: any): string | null {
+  if (!provider) return null;
+  if (provider.isMetaMask) return "metamask";
+  if (provider.isCoinbaseWallet) return "coinbasewallet";
+  if (provider.isRabby) return "rabbywallet";
+  if (provider.isBackpack) return "backpack";
+  if (provider.isPhantom) return "phantom";
+  if (provider.isKeplr) return "keplr";
+  if (provider.isSubWallet) return "subwallet";
+  return null;
+}
+
+function walletIdentityKey(wallet: InjectedWallet): string {
+  const rdns = compactWalletKey(wallet.rdns ?? "");
+  if (rdns) return `rdns:${rdns}`;
+
+  const flag = providerFlagKey(wallet.provider as any);
+  if (flag) return `flag:${flag}`;
+
+  const name = compactWalletKey(wallet.name);
+  if (name && name !== "injectedwallet" && name !== "wallet") return `name:${name}`;
+
+  return `id:${wallet.id}`;
+}
+
+function dedupeInjectedWallets(arr: InjectedWallet[]): InjectedWallet[] {
+  const seenProviders = new Set<any>();
+  const seenIdentities = new Set<string>();
+  const out: InjectedWallet[] = [];
+
+  for (const wallet of arr) {
+    if (!wallet?.provider) continue;
+
+    if (seenProviders.has(wallet.provider as any)) continue;
+    seenProviders.add(wallet.provider as any);
+
+    const identity = walletIdentityKey(wallet);
+    if (seenIdentities.has(identity)) continue;
+    seenIdentities.add(identity);
+
+    out.push(wallet);
   }
+
   return out;
 }
 
@@ -85,12 +126,17 @@ function walletIdFromEip6963(info: EIP6963ProviderInfo): string {
 function fallbackWalletLabel(p: any) {
   if (p?.isMetaMask) return "MetaMask";
   if (p?.isCoinbaseWallet) return "Coinbase Wallet";
+  if (p?.isRabby) return "Rabby Wallet";
+  if (p?.isKeplr) return "Keplr";
+  if (p?.isSubWallet) return "SubWallet";
+  if (p?.isPhantom) return "Phantom";
+  if (p?.isBackpack) return "Backpack";
   return "Injected wallet";
 }
 
 /**
  * List injected wallets in the browser.
- * Uses EIP-6963 multi-provider discovery when available, with fallbacks to window.ethereum/providers.
+ * Uses EIP-6963 multi-provider discovery when available, plus the legacy providers array when present.
  */
 export async function listInjectedWallets(timeoutMs = 600): Promise<InjectedWallet[]> {
   if (typeof window === "undefined") return [];
@@ -115,7 +161,9 @@ export async function listInjectedWallets(timeoutMs = 600): Promise<InjectedWall
     // ignore
   }
 
-  // 2) window.ethereum.providers
+  // 2) Legacy multi-provider fallback.
+  // Intentionally do not add the single window.ethereum object as a connect choice:
+  // it often duplicates an EIP-6963 provider and can show the same wallet twice.
   try {
     const anyWin: any = window as any;
     const eth: any = anyWin.ethereum;
@@ -125,17 +173,15 @@ export async function listInjectedWallets(timeoutMs = 600): Promise<InjectedWall
       providers.forEach((p, i) => {
         if (!p || typeof p.request !== "function") return;
         const label = fallbackWalletLabel(p);
-        const id = `injected:${label.toLowerCase().replace(/\s+/g, "")}:${i}`;
+        const id = `injected:${compactWalletKey(label) || "wallet"}:${i}`;
         out.push({ id, name: label, provider: p as Eip1193Provider });
       });
-    } else if (eth && typeof eth.request === "function") {
-      out.push({ id: "injected:default", name: fallbackWalletLabel(eth), provider: eth as Eip1193Provider });
     }
   } catch {
     // ignore
   }
 
-  return dedupeByProviderRef(out);
+  return dedupeInjectedWallets(out);
 }
 
 function pickByPrefer(wallets: InjectedWallet[], prefer: "any" | "metamask" | "coinbase"): InjectedWallet | null {
