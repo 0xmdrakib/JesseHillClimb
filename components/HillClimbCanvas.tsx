@@ -1601,7 +1601,7 @@ function getVehicleArtTuning(vehicleId: VehicleId, isPhoneViewport: boolean): Ve
       headOffsetYPx: SPORTS_CAR_HEAD_MANUAL.offsetYPx,
       headSizeMult: isPhoneViewport ? 0.78 : SPORTS_CAR_HEAD_MANUAL.sizeMult,
       rearWheelOffsetXPx: 0,
-      frontWheelOffsetXPx: 0,
+      frontWheelOffsetXPx: isPhoneViewport ? 8 : 0,
       wheelOffsetYPx: 0,
       wheelSizeMult: 1,
     };
@@ -1692,8 +1692,8 @@ function drawVehicle(ctx: CanvasRenderingContext2D, toScreen: (v: planck.Vec2) =
   }
 
   if (vehicleId === "sportsCar" && sportsCarWheelImg && sportsCarWheelImg.complete) {
-    drawSportsCarWheel(ctx, toScreen(car.wheel1.getPosition()), car.wheel1.getAngle(), vPhys.wheelRadius, dpr, sportsCarWheelImg, artTuning.wheelSizeMult, artTuning.rearWheelOffsetXPx, artTuning.wheelOffsetYPx);
-    drawSportsCarWheel(ctx, toScreen(car.wheel2.getPosition()), car.wheel2.getAngle(), vPhys.wheelRadius, dpr, sportsCarWheelImg, artTuning.wheelSizeMult, artTuning.frontWheelOffsetXPx, artTuning.wheelOffsetYPx);
+    drawSportsCarWheel(ctx, toScreen(car.wheel1.getPosition()), car.wheel1.getAngle(), chassis.getAngle(), vPhys.wheelRadius, dpr, sportsCarWheelImg, artTuning.wheelSizeMult, artTuning.rearWheelOffsetXPx, artTuning.wheelOffsetYPx);
+    drawSportsCarWheel(ctx, toScreen(car.wheel2.getPosition()), car.wheel2.getAngle(), chassis.getAngle(), vPhys.wheelRadius, dpr, sportsCarWheelImg, artTuning.wheelSizeMult, artTuning.frontWheelOffsetXPx, artTuning.wheelOffsetYPx);
   } else if (vehicleId === "jeep" && jeepWheelImg && jeepWheelImg.complete) {
     drawJeepWheel(ctx, toScreen(car.wheel1.getPosition()), car.wheel1.getAngle(), chassis.getAngle(), vPhys.wheelRadius, dpr, jeepWheelImg, artTuning.rearWheelOffsetXPx, artTuning.wheelOffsetYPx, artTuning.wheelSizeMult);
     drawJeepWheel(ctx, toScreen(car.wheel2.getPosition()), car.wheel2.getAngle(), chassis.getAngle(), vPhys.wheelRadius, dpr, jeepWheelImg, artTuning.frontWheelOffsetXPx, artTuning.wheelOffsetYPx, artTuning.wheelSizeMult);
@@ -1882,14 +1882,6 @@ function drawVehicle(ctx: CanvasRenderingContext2D, toScreen: (v: planck.Vec2) =
       ctx.imageSmoothingQuality = "high";
       ctx.drawImage(jeepBodyImg, bodyX, bodyY, bodyW, bodyH);
       ctx.restore();
-    } else {
-      const bodyGrad = ctx.createLinearGradient(0, -60, 0, 50);
-      bodyGrad.addColorStop(0, vVis.highlightColor); bodyGrad.addColorStop(0.55, vVis.bodyColor); bodyGrad.addColorStop(1, vVis.accentColor);
-      ctx.lineWidth = 3.5; ctx.strokeStyle = "rgba(0,0,0,0.55)"; ctx.fillStyle = bodyGrad;
-
-      ctx.beginPath(); ctx.moveTo(-54, -10); ctx.lineTo(-54, 10); ctx.quadraticCurveTo(-54, 34, -28, 34); ctx.lineTo(44, 34); ctx.quadraticCurveTo(62, 34, 66, 16); ctx.lineTo(72, 16); ctx.quadraticCurveTo(80, 16, 80, 6); ctx.lineTo(80, -6); ctx.quadraticCurveTo(80, -20, 60, -20); ctx.lineTo(18, -20); ctx.lineTo(6, -40); ctx.quadraticCurveTo(0, -52, -18, -52); ctx.lineTo(-44, -52); ctx.quadraticCurveTo(-60, -52, -60, -34); ctx.lineTo(-60, -10); ctx.closePath(); ctx.fill(); ctx.stroke();
-      ctx.fillStyle = "rgba(200,240,255,0.9)"; ctx.beginPath(); ctx.moveTo(-34, -22); ctx.lineTo(-6, -22); ctx.lineTo(-14, -46); ctx.lineTo(-34, -46); ctx.closePath(); ctx.fill(); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(-4, -20); ctx.lineTo(-4, -60); ctx.lineTo(18, -60); ctx.stroke();
     }
   }
 
@@ -2022,9 +2014,13 @@ function drawJeepWheel(
   ctx.restore();
 }
 
-function drawSportsCarWheel(ctx: CanvasRenderingContext2D, sp: { x: number; y: number }, ang: number, radiusM: number, dpr: number, wheelImg: HTMLImageElement, sizeMult = 1, offsetXPx = 0, offsetYPx = 0) {
+function drawSportsCarWheel(ctx: CanvasRenderingContext2D, sp: { x: number; y: number }, ang: number, chassisAngle: number, radiusM: number, dpr: number, wheelImg: HTMLImageElement, sizeMult = 1, offsetXPx = 0, offsetYPx = 0) {
+  const c = Math.cos(-chassisAngle);
+  const s = Math.sin(-chassisAngle);
+  const ox = (offsetXPx * c - offsetYPx * s) * dpr;
+  const oy = (offsetXPx * s + offsetYPx * c) * dpr;
   const r = radiusM * SCALE * dpr * sizeMult;
-  ctx.save(); ctx.translate(sp.x + offsetXPx * dpr, sp.y + offsetYPx * dpr); ctx.rotate(-ang);
+  ctx.save(); ctx.translate(sp.x + ox, sp.y + oy); ctx.rotate(-ang);
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
   ctx.drawImage(wheelImg, -r, -r, r * 2, r * 2);
