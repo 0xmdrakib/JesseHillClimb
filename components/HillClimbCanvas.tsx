@@ -1599,7 +1599,7 @@ function getVehicleArtTuning(vehicleId: VehicleId, isPhoneViewport: boolean): Ve
       bodyOffsetYPx: isPhoneViewport ? -1 : 0,
       headOffsetXPx: SPORTS_CAR_HEAD_MANUAL.offsetXPx,
       headOffsetYPx: SPORTS_CAR_HEAD_MANUAL.offsetYPx,
-      headSizeMult: isPhoneViewport ? 0.78 : SPORTS_CAR_HEAD_MANUAL.sizeMult,
+      headSizeMult: isPhoneViewport ? 0.68 : SPORTS_CAR_HEAD_MANUAL.sizeMult,
       rearWheelOffsetXPx: 0,
       frontWheelOffsetXPx: isPhoneViewport ? 8 : 0,
       wheelOffsetYPx: 0,
