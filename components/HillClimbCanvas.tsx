@@ -551,7 +551,12 @@ export const HillClimbCanvas = forwardRef<
 
       if (sNow.status === "IDLE" || sNow.status === "RUN") lastEndStatusRef.current = null;
 
-      audioManager.updateEngine(sNow.rpm01, sNow.status === "RUN");
+      const engineAudible = sNow.status === "RUN" && (
+        Math.abs(throttleRef.current) > 0.03 ||
+        Math.abs(throttleTargetRef.current) > 0.03 ||
+        sNow.speedKmh > 1.25
+      );
+      audioManager.updateEngine(sNow.rpm01, engineAudible);
 
       const emitDue = now - lastEmit > 1 / 30;
       const emitImportant = sNow.status !== lastStatus || (sNow.toastT > 0 && sNow.toastT !== lastToastT);
@@ -1576,29 +1581,29 @@ function getVehicleArtTuning(vehicleId: VehicleId, isPhoneViewport: boolean): Ve
     return {
       bodyScale: 1,
       bodyOffsetXPx: JEEP_BODY_MANUAL.offsetXPx,
-      bodyOffsetYPx: isPhoneViewport ? JEEP_BODY_MANUAL.offsetYPx - 4 : JEEP_BODY_MANUAL.offsetYPx,
+      bodyOffsetYPx: JEEP_BODY_MANUAL.offsetYPx,
       headOffsetXPx: JEEP_HEAD_MANUAL.offsetXPx,
-      headOffsetYPx: isPhoneViewport ? JEEP_HEAD_MANUAL.offsetYPx - 2 : JEEP_HEAD_MANUAL.offsetYPx,
-      headSizeMult: isPhoneViewport ? 0.58 : JEEP_HEAD_MANUAL.sizeMult,
+      headOffsetYPx: JEEP_HEAD_MANUAL.offsetYPx,
+      headSizeMult: JEEP_HEAD_MANUAL.sizeMult,
       rearWheelOffsetXPx: JEEP_WHEEL_MANUAL.rearOffsetXPx,
       frontWheelOffsetXPx: JEEP_WHEEL_MANUAL.frontOffsetXPx,
-      wheelOffsetYPx: isPhoneViewport ? -2 : JEEP_WHEEL_MANUAL.offsetYPx,
-      wheelSizeMult: isPhoneViewport ? 0.92 : JEEP_WHEEL_MANUAL.sizeMult,
+      wheelOffsetYPx: JEEP_WHEEL_MANUAL.offsetYPx,
+      wheelSizeMult: JEEP_WHEEL_MANUAL.sizeMult,
     };
   }
 
   if (vehicleId === "sportsCar") {
     return {
-      bodyScale: isPhoneViewport ? 1.04 : 1,
+      bodyScale: isPhoneViewport ? 1.12 : 1,
       bodyOffsetXPx: 0,
-      bodyOffsetYPx: isPhoneViewport ? -3 : 0,
+      bodyOffsetYPx: isPhoneViewport ? -1 : 0,
       headOffsetXPx: SPORTS_CAR_HEAD_MANUAL.offsetXPx,
-      headOffsetYPx: isPhoneViewport ? SPORTS_CAR_HEAD_MANUAL.offsetYPx - 1 : SPORTS_CAR_HEAD_MANUAL.offsetYPx,
-      headSizeMult: isPhoneViewport ? 0.76 : SPORTS_CAR_HEAD_MANUAL.sizeMult,
+      headOffsetYPx: SPORTS_CAR_HEAD_MANUAL.offsetYPx,
+      headSizeMult: isPhoneViewport ? 0.78 : SPORTS_CAR_HEAD_MANUAL.sizeMult,
       rearWheelOffsetXPx: 0,
       frontWheelOffsetXPx: 0,
-      wheelOffsetYPx: isPhoneViewport ? -1 : 0,
-      wheelSizeMult: isPhoneViewport ? 0.9 : 1,
+      wheelOffsetYPx: 0,
+      wheelSizeMult: 1,
     };
   }
 
