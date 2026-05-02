@@ -41,6 +41,30 @@ function shortWalletAddress(address?: string | null) {
   return address.length > 12 ? `${address.slice(0, 6)}…${address.slice(-4)}` : address;
 }
 
+function VehicleHeroIcon({ vehicleId, emoji }: { vehicleId: VehicleId; emoji: string }) {
+  if (vehicleId === "jeep") {
+    return (
+      <div className="gm-vpic gm-vpicJeep" aria-hidden="true">
+        <img className="gm-vpicWheel gm-vpicJeepRear" src="/assets/vehicles/jeep_wheel.png" alt="" />
+        <img className="gm-vpicWheel gm-vpicJeepFront" src="/assets/vehicles/jeep_wheel.png" alt="" />
+        <img className="gm-vpicBody gm-vpicJeepBody" src="/assets/vehicles/jeep_body.png" alt="" />
+      </div>
+    );
+  }
+
+  if (vehicleId === "sportsCar") {
+    return (
+      <div className="gm-vpic gm-vpicSports" aria-hidden="true">
+        <img className="gm-vpicWheel gm-vpicSportsRear" src="/assets/vehicles/sports_car_wheel.png" alt="" />
+        <img className="gm-vpicWheel gm-vpicSportsFront" src="/assets/vehicles/sports_car_wheel.png" alt="" />
+        <img className="gm-vpicBody gm-vpicSportsBody" src="/assets/vehicles/sports_car_body.png" alt="" />
+      </div>
+    );
+  }
+
+  return <div className="gm-vemoji">{emoji}</div>;
+}
+
 const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap');
 
@@ -51,13 +75,30 @@ const CSS = `
 
 /* top bar */
 .gm-top{position:relative;z-index:10;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 18px;flex-shrink:0}
-.gm-brand{display:flex;align-items:center;gap:10px;min-width:0}
+.gm-brand{display:flex;align-items:center;gap:10px;min-width:0;flex:1 1 auto}
 .gm-brandText{min-width:0}
-.gm-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;min-width:0;flex-wrap:wrap}
+.gm-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;min-width:0;flex:0 0 auto}
 
 /* coin badge */
 .gm-coin{display:inline-flex;align-items:center;gap:6px;background:linear-gradient(135deg,#b8892c,#d4ab55);border-radius:999px;padding:6px 14px 6px 9px;color:#fff;font-weight:800;font-size:14px;box-shadow:0 2px 10px rgba(184,137,44,.35);white-space:nowrap}
 .gm-coin .ico{width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,.25);display:flex;align-items:center;justify-content:center;font-size:13px}
+.gm-heroCoin{display:none}
+
+/* polished home vehicle preview */
+.gm-heroCard{position:relative}
+.gm-vemoji{font-size:64px;line-height:1;margin-bottom:12px}
+.gm-vpic{position:relative;width:112px;height:72px;margin:0 auto 12px;filter:drop-shadow(0 10px 10px rgba(42,31,14,.13))}
+.gm-vpic img{position:absolute;display:block;user-select:none;pointer-events:none}
+.gm-vpicBody{z-index:2;left:50%;top:50%;transform:translate(-50%,-50%);height:auto;object-fit:contain}
+.gm-vpicWheel{z-index:1;border-radius:999px;animation:gmWheelIdle 7s linear infinite}
+.gm-vpicJeepBody{width:112px}
+.gm-vpicJeepRear{width:24px;height:24px;left:18px;top:43px}
+.gm-vpicJeepFront{width:24px;height:24px;right:14px;top:43px}
+.gm-vpicSports{width:132px;height:70px}
+.gm-vpicSportsBody{width:132px;top:29px}
+.gm-vpicSportsRear{width:25px;height:25px;left:20px;top:38px}
+.gm-vpicSportsFront{width:25px;height:25px;right:24px;top:38px}
+@keyframes gmWheelIdle{to{transform:rotate(360deg)}}
 
 /* wallet badge */
 .gm-wallet{appearance:none;border:1px solid rgba(42,31,14,.10);border-radius:999px;background:rgba(255,255,255,.90);color:#2a1f0e;min-height:38px;padding:6px 11px;display:inline-flex;align-items:center;gap:8px;font-family:'Nunito',sans-serif;font-weight:900;font-size:12px;box-shadow:0 4px 16px rgba(42,31,14,.08);cursor:pointer;white-space:nowrap}
@@ -71,16 +112,28 @@ const CSS = `
 .gm-walletPower:active,.gm-wallet:active{transform:translateY(1px)}
 .gm-errorPill{position:relative;z-index:11;margin:-4px 18px 8px auto;width:fit-content;max-width:calc(100% - 36px);border-radius:999px;background:#fff1f1;color:#d73535;border:1px solid rgba(215,53,53,.16);padding:6px 10px;font-size:11px;font-weight:900;box-shadow:0 4px 16px rgba(215,53,53,.08)}
 
-@media (max-width:390px){
-  .gm-top{align-items:flex-start;flex-wrap:wrap;padding:12px 14px 8px}
-  .gm-brand{width:100%}
-  .gm-actions{width:100%;justify-content:flex-end}
-  .gm-wallet{min-height:34px;padding:5px 9px;font-size:11px}
+@media (max-width:520px){
+  .gm-top{align-items:center;flex-wrap:nowrap;padding:12px 16px 8px;gap:8px}
+  .gm-brand{min-width:0;flex:1 1 auto}
+  .gm-brand img{width:42px!important;height:42px!important;border-radius:14px!important}
+  .gm-brandText>div:first-child{font-size:15px!important;max-width:clamp(142px,42vw,220px);overflow:hidden;text-overflow:ellipsis}
+  .gm-actions{width:auto;justify-content:flex-end;flex-wrap:nowrap;gap:6px}
+  .gm-wallet{min-height:36px;padding:6px 11px;font-size:12px}
   .gm-walletConnected{padding:4px 5px 4px 9px}
+  .gm-walletText{max-width:88px}
   .gm-walletPower{width:28px;height:28px}
   .gm-walletPower svg{width:14px;height:14px}
   .gm-coin{font-size:12px;padding:5px 12px 5px 8px}
   .gm-coin .ico{width:19px;height:19px;font-size:11px}
+  .gm.gm-home .gm-topCoin{display:none}
+  .gm.gm-home .gm-heroCoin{display:inline-flex;position:absolute;top:14px;right:14px;z-index:2}
+  .gm-vpic{margin-top:12px}
+}
+
+@media (max-width:360px){
+  .gm-brandText>div:first-child{max-width:142px}
+  .gm-walletText{max-width:72px}
+  .gm-wallet{padding-left:9px;padding-right:9px}
 }
 
 /* body */
@@ -166,8 +219,7 @@ export function MainMenu({
   const btnLabel = tab === "maps" ? "▶ Start Race" : tab === "garage" ? "▶ Next: Select Map" : "▶ Setup Race";
 
   return (
-    <div className="gm">
-      <style>{CSS}</style>
+    <div className={`gm gm-${tab}`}><style>{CSS}</style>
 
       {/* ═══ TOP BAR ═══ */}
       <div className="gm-top">
@@ -199,7 +251,7 @@ export function MainMenu({
               <span>{connectBusy ? "Connecting…" : "Connect"}</span>
             </button>
           )}
-          <div className="gm-coin">
+          <div className="gm-coin gm-topCoin">
             <div className="ico">🪙</div>
             <span>{coins.toLocaleString()}</span>
           </div>
@@ -214,11 +266,15 @@ export function MainMenu({
         {tab === "home" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             {/* Hero vehicle showcase */}
-            <div className="gm-c" style={{
+            <div className="gm-c gm-heroCard" style={{
               background: "linear-gradient(150deg,#faf6ed 0%,#f3ead8 100%)",
               padding: "28px 20px 22px", textAlign: "center",
             }}>
-              <div style={{ fontSize: 64, lineHeight: 1, marginBottom: 12 }}>{vc.emoji}</div>
+              <div className="gm-coin gm-heroCoin">
+                <div className="ico">🪙</div>
+                <span>{coins.toLocaleString()}</span>
+              </div>
+              <VehicleHeroIcon vehicleId={selectedVehicle} emoji={vc.emoji} />
               <div style={{ fontSize: 22, fontWeight: 900, color: "#2a1f0e", marginBottom: 4 }}>{vc.name}</div>
               <div style={{ fontSize: 13, color: "#8a7d6a", marginBottom: 14 }}>{vc.tagline}</div>
               <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
