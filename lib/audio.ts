@@ -66,13 +66,20 @@ export class AudioManager {
   updateEngine(rpm01: number, isRunning: boolean) {
     if (!this.ctx || !this.engineOsc || !this.engineFilter || !this.engineGain) return;
 
-    if (!isRunning) {
-      this.engineGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.1);
+    const now = this.ctx.currentTime;
+    const rpm = Math.max(0, Math.min(1, Number.isFinite(rpm01) ? rpm01 : 0));
+
+    // Hard-mute the oscillator whenever the vehicle is not actively moving.
+    // A constantly running oscillator at tiny gain can still create an audible whine on phone speakers.
+    if (!isRunning || rpm <= 0.015) {
+      this.engineGain.gain.cancelScheduledValues(now);
+      this.engineGain.gain.setValueAtTime(0, now);
       return;
     }
 
-    // Volume curve based on RPM
-    this.engineGain.gain.setTargetAtTime(0.1 + rpm01 * 0.15, this.ctx.currentTime, 0.1);
+    // Volume curve based on RPM. Keep the minimum lower than before so slow coasting stays subtle.
+    this.engineGain.gain.cancelScheduledValues(now);
+    this.engineGain.gain.setTargetAtTime(0.035 + rpm * 0.18, now, 0.08);
 
     let baseFreq = 40;
     let freqMul = 100;
@@ -96,9 +103,9 @@ export class AudioManager {
       filterBase = 350;
     }
 
-    const targetFreq = baseFreq + rpm01 * freqMul;
-    this.engineOsc.frequency.setTargetAtTime(targetFreq, this.ctx.currentTime, 0.1);
-    this.engineFilter.frequency.setTargetAtTime(filterBase + rpm01 * 1200, this.ctx.currentTime, 0.1);
+    const targetFreq = baseFreq + rpm * freqMul;
+    this.engineOsc.frequency.setTargetAtTime(targetFreq, now, 0.1);
+    this.engineFilter.frequency.setTargetAtTime(filterBase + rpm * 1200, now, 0.1);
   }
 
   playCoin() {
