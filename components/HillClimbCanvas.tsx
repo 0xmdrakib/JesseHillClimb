@@ -1632,7 +1632,9 @@ function drawVehicle(ctx: CanvasRenderingContext2D, toScreen: (v: planck.Vec2) =
   }
 
   ctx.save(); ctx.translate(sp.x, sp.y); ctx.rotate(-a);
-  const BODY_BASE_PX_PER_M = 45; const bodyScale = miniMode ? (SCALE / BODY_BASE_PX_PER_M) : 1;
+  const BODY_BASE_PX_PER_M = 45;
+  const usesPixelMatchedArtwork = vehicleId === "jeep" || vehicleId === "sportsCar";
+  const bodyScale = miniMode && !usesPixelMatchedArtwork ? (SCALE / BODY_BASE_PX_PER_M) : 1;
   ctx.scale(dpr * bodyScale, dpr * bodyScale);
 
   if (vehicleId === "bicycle") {
