@@ -70,6 +70,8 @@ const CSS = `
 .gm-walletPower:hover{background:#fff;color:#6b5d4a}
 .gm-walletPower:active,.gm-wallet:active{transform:translateY(1px)}
 .gm-errorPill{position:relative;z-index:11;margin:-4px 18px 8px auto;width:fit-content;max-width:calc(100% - 36px);border-radius:999px;background:#fff1f1;color:#d73535;border:1px solid rgba(215,53,53,.16);padding:6px 10px;font-size:11px;font-weight:900;box-shadow:0 4px 16px rgba(215,53,53,.08)}
+.gm-pageCoin{position:absolute;top:calc(66px + env(safe-area-inset-top,0px));right:16px;z-index:12;pointer-events:none}
+.gm-pageCoinNudge{right:66px}
 
 @media (max-width:390px){
   .gm-top{align-items:flex-start;gap:10px;padding:calc(12px + env(safe-area-inset-top,0px)) 14px 8px}
@@ -81,6 +83,8 @@ const CSS = `
   .gm-walletPower svg{width:14px;height:14px}
   .gm-coin{font-size:12px;padding:5px 12px 5px 8px}
   .gm-coin .ico{width:19px;height:19px;font-size:11px}
+  .gm-pageCoin{top:calc(58px + env(safe-area-inset-top,0px));right:14px}
+  .gm-pageCoinNudge{right:58px}
 }
 
 .gm-homeHero{position:relative;padding:28px 20px 22px;text-align:center}
@@ -172,6 +176,7 @@ export function MainMenu({
   };
 
   const btnLabel = tab === "maps" ? "▶ Start Race" : tab === "garage" ? "▶ Next: Select Map" : "▶ Setup Race";
+  const showPageCoin = tab === "garage" || tab === "maps" || tab === "achievements";
 
   return (
     <div className="gm">
@@ -207,15 +212,15 @@ export function MainMenu({
               <span>{connectBusy ? "Connecting…" : "Connect"}</span>
             </button>
           )}
-          {tab !== "home" && (
-            <div className="gm-coin">
-              <div className="ico">🪙</div>
-              <span>{coins.toLocaleString()}</span>
-            </div>
-          )}
         </div>
       </div>
       {walletError ? <div className="gm-errorPill">⚠ {walletError}</div> : null}
+      {showPageCoin ? (
+        <div className={`gm-pageCoin ${tab === "achievements" ? "gm-pageCoinNudge" : ""} gm-coin`} aria-label="Coins balance">
+          <div className="ico">🪙</div>
+          <span>{coins.toLocaleString()}</span>
+        </div>
+      ) : null}
 
       {/* ═══ BODY ═══ */}
       <div ref={scrollRef} className="gm-body">
