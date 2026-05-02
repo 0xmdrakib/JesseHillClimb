@@ -176,7 +176,7 @@ export function MainMenu({
   };
 
   const btnLabel = tab === "maps" ? "▶ Start Race" : tab === "garage" ? "▶ Next: Select Map" : "▶ Setup Race";
-  const showPageCoin = tab === "garage" || tab === "maps" || tab === "achievements";
+  const showPageCoin = tab === "garage" || tab === "maps";
 
   return (
     <div className="gm">
