@@ -1698,7 +1698,11 @@ function drawVehicle(ctx: CanvasRenderingContext2D, toScreen: (v: planck.Vec2) =
   }
 
   ctx.save(); ctx.translate(sp.x, sp.y); ctx.rotate(-a);
-  const BODY_BASE_PX_PER_M = 45; const bodyScale = miniMode ? (SCALE / BODY_BASE_PX_PER_M) : 1;
+  const BODY_BASE_PX_PER_M = 45;
+  // Image-based vehicle art is already sized from the current physics SCALE.
+  // Applying the extra Mini App scale again made the jeep/sports-car bodies shrink on phones
+  // while their wheels stayed full-size. Keep that extra scale only for the hand-drawn bike.
+  const bodyScale = miniMode && vehicleId === "bicycle" ? (SCALE / BODY_BASE_PX_PER_M) : 1;
   ctx.scale(dpr * bodyScale, dpr * bodyScale);
 
   if (vehicleId === "bicycle") {
