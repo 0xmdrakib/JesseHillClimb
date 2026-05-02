@@ -216,7 +216,7 @@ export function MainMenu({
       </div>
       {walletError ? <div className="gm-errorPill">⚠ {walletError}</div> : null}
       {showPageCoin ? (
-        <div className={`gm-pageCoin ${tab === "achievements" ? "gm-pageCoinNudge" : ""} gm-coin`} aria-label="Coins balance">
+        <div className="gm-pageCoin gm-coin" aria-label="Coins balance">
           <div className="ico">🪙</div>
           <span>{coins.toLocaleString()}</span>
         </div>
