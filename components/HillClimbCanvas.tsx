@@ -59,6 +59,12 @@ const SPORTS_CAR_DESKTOP_TARGET_WORLD_W = 12.6;
 const SPORTS_CAR_DESKTOP_MIN_PX_PER_M = 42;
 const SPORTS_CAR_DESKTOP_MAX_PX_PER_M = 74;
 
+function isPhoneSizedViewport(cssW: number, cssH: number) {
+  const shortEdge = Math.min(cssW, cssH);
+  const coarsePointer = typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
+  return shortEdge <= 520 || (coarsePointer && shortEdge <= 620);
+}
+
 type Track = { xs: number[]; ys: number[] };
 
 function mulberry32(seed: number) {
@@ -275,6 +281,7 @@ export const HillClimbCanvas = forwardRef<
   const jeepWheelImgRef = useRef<HTMLImageElement | null>(null);
   const sportsCarBodyImgRef = useRef<HTMLImageElement | null>(null);
   const sportsCarWheelImgRef = useRef<HTMLImageElement | null>(null);
+  const viewportRef = useRef({ cssW: 0, cssH: 0, isPhone: false });
 
   const stateRef = useRef<HillClimbState>({
     distanceM: 0, bestM: 0, coins: 0, fuel: 100, status: "IDLE",
@@ -285,8 +292,8 @@ export const HillClimbCanvas = forwardRef<
   useEffect(() => { miniModeRef.current = Boolean(miniMode); }, [miniMode]);
   useEffect(() => { headIdRef.current = headId; }, [headId]);
 
-  const updateScaleForViewport = (cssW: number) => {
-    const isPhone = cssW < 520 || miniModeRef.current;
+  const updateScaleForViewport = (cssW: number, cssH: number) => {
+    const isPhone = miniModeRef.current || isPhoneSizedViewport(cssW, cssH);
     const isSportsCarDesktop =
       vehicleIdRef.current === "sportsCar" && !isPhone && cssW >= SPORTS_CAR_DESKTOP_MIN_CSS_W;
 
@@ -300,6 +307,7 @@ export const HillClimbCanvas = forwardRef<
     const maxPxPerM = isPhone ? 32 : isSportsCarDesktop ? SPORTS_CAR_DESKTOP_MAX_PX_PER_M : 46;
 
     SCALE = Math.max(minPxPerM, Math.min(maxPxPerM, raw));
+    viewportRef.current = { cssW, cssH, isPhone };
   };
 
   useEffect(() => {
@@ -513,7 +521,8 @@ export const HillClimbCanvas = forwardRef<
 
       const rect = canvas.getBoundingClientRect();
       const cssW = Math.max(1, Math.ceil(canvas.clientWidth || rect.width));
-      updateScaleForViewport(cssW);
+      const cssH = Math.max(1, Math.ceil(canvas.clientHeight || rect.height));
+      updateScaleForViewport(cssW, cssH);
 
       const now = tMs / 1000;
       let frameTime = now - lastTime;
@@ -561,7 +570,7 @@ export const HillClimbCanvas = forwardRef<
       const cssW = Math.max(1, Math.ceil(c.clientWidth || rect.width));
       const cssH = Math.max(1, Math.ceil(c.clientHeight || rect.height));
 
-      updateScaleForViewport(cssW);
+      updateScaleForViewport(cssW, cssH);
 
       const pxW = Math.max(1, Math.ceil(cssW * dpr));
       const pxH = Math.max(1, Math.ceil(cssH * dpr));
@@ -890,7 +899,7 @@ export const HillClimbCanvas = forwardRef<
 
     const groundY = sampleTrackY(track, car.chassis.getPosition().x);
     const screenGroundY = toScreen(Vec2(0, groundY)).y;
-    drawVehicle(ctx, toScreen, car, dpr, headIdRef.current, headImgRef.current, headImg2Ref.current, jeepBodyImgRef.current, jeepWheelImgRef.current, sportsCarBodyImgRef.current, sportsCarWheelImgRef.current, miniModeRef.current, vehicleIdRef.current, screenGroundY);
+    drawVehicle(ctx, toScreen, car, dpr, headIdRef.current, headImgRef.current, headImg2Ref.current, jeepBodyImgRef.current, jeepWheelImgRef.current, sportsCarBodyImgRef.current, sportsCarWheelImgRef.current, miniModeRef.current, viewportRef.current.isPhone, vehicleIdRef.current, screenGroundY);
 
     // Foreground Parallax (Fast moving elements)
     drawForeground(ctx, w, h, track, camX, camY, dpr, viewCX, viewCY, mapConfig, seedRef.current);
@@ -1549,12 +1558,70 @@ const JEEP_WHEEL_MANUAL = {
   sizeMult: 1.0,        // visual wheel size; keep 1.0 to match physics radius
 } as const;
 
-function getJeepBodyLayout(vPhys: { spawnY: number; wheelRadius: number; wheelbase: number }, imgW: number, imgH: number) {
+type VehicleArtTuning = {
+  bodyScale: number;
+  bodyOffsetXPx: number;
+  bodyOffsetYPx: number;
+  headOffsetXPx: number;
+  headOffsetYPx: number;
+  headSizeMult: number;
+  rearWheelOffsetXPx: number;
+  frontWheelOffsetXPx: number;
+  wheelOffsetYPx: number;
+  wheelSizeMult: number;
+};
+
+function getVehicleArtTuning(vehicleId: VehicleId, isPhoneViewport: boolean): VehicleArtTuning {
+  if (vehicleId === "jeep") {
+    return {
+      bodyScale: 1,
+      bodyOffsetXPx: JEEP_BODY_MANUAL.offsetXPx,
+      bodyOffsetYPx: isPhoneViewport ? JEEP_BODY_MANUAL.offsetYPx - 4 : JEEP_BODY_MANUAL.offsetYPx,
+      headOffsetXPx: JEEP_HEAD_MANUAL.offsetXPx,
+      headOffsetYPx: isPhoneViewport ? JEEP_HEAD_MANUAL.offsetYPx - 2 : JEEP_HEAD_MANUAL.offsetYPx,
+      headSizeMult: isPhoneViewport ? 0.58 : JEEP_HEAD_MANUAL.sizeMult,
+      rearWheelOffsetXPx: JEEP_WHEEL_MANUAL.rearOffsetXPx,
+      frontWheelOffsetXPx: JEEP_WHEEL_MANUAL.frontOffsetXPx,
+      wheelOffsetYPx: isPhoneViewport ? -2 : JEEP_WHEEL_MANUAL.offsetYPx,
+      wheelSizeMult: isPhoneViewport ? 0.92 : JEEP_WHEEL_MANUAL.sizeMult,
+    };
+  }
+
+  if (vehicleId === "sportsCar") {
+    return {
+      bodyScale: isPhoneViewport ? 1.04 : 1,
+      bodyOffsetXPx: 0,
+      bodyOffsetYPx: isPhoneViewport ? -3 : 0,
+      headOffsetXPx: SPORTS_CAR_HEAD_MANUAL.offsetXPx,
+      headOffsetYPx: isPhoneViewport ? SPORTS_CAR_HEAD_MANUAL.offsetYPx - 1 : SPORTS_CAR_HEAD_MANUAL.offsetYPx,
+      headSizeMult: isPhoneViewport ? 0.76 : SPORTS_CAR_HEAD_MANUAL.sizeMult,
+      rearWheelOffsetXPx: 0,
+      frontWheelOffsetXPx: 0,
+      wheelOffsetYPx: isPhoneViewport ? -1 : 0,
+      wheelSizeMult: isPhoneViewport ? 0.9 : 1,
+    };
+  }
+
+  return {
+    bodyScale: 1,
+    bodyOffsetXPx: 0,
+    bodyOffsetYPx: 0,
+    headOffsetXPx: 0,
+    headOffsetYPx: 0,
+    headSizeMult: 1,
+    rearWheelOffsetXPx: 0,
+    frontWheelOffsetXPx: 0,
+    wheelOffsetYPx: 0,
+    wheelSizeMult: 1,
+  };
+}
+
+function getJeepBodyLayout(vPhys: { spawnY: number; wheelRadius: number; wheelbase: number }, imgW: number, imgH: number, tuning: VehicleArtTuning = getVehicleArtTuning("jeep", false)) {
   const wheelRestY = (vPhys.spawnY - (vPhys.wheelRadius + 0.2)) * SCALE;
-  const bodyW = ((vPhys.wheelbase * SCALE) * 2) / JEEP_WHEEL_SEPARATION_PCT;
+  const bodyW = (((vPhys.wheelbase * SCALE) * 2) / JEEP_WHEEL_SEPARATION_PCT) * tuning.bodyScale;
   const bodyH = bodyW * (imgH / imgW);
-  const bodyX = (-vPhys.wheelbase * SCALE) - JEEP_REAR_WHEEL_X_PCT * bodyW + JEEP_BODY_MANUAL.offsetXPx;
-  const bodyY = wheelRestY - JEEP_WHEEL_Y_PCT * bodyH + JEEP_BODY_MANUAL.offsetYPx;
+  const bodyX = (-vPhys.wheelbase * SCALE) - JEEP_REAR_WHEEL_X_PCT * bodyW + tuning.bodyOffsetXPx;
+  const bodyY = wheelRestY - JEEP_WHEEL_Y_PCT * bodyH + tuning.bodyOffsetYPx;
   return { bodyX, bodyY, bodyW, bodyH };
 }
 
@@ -1562,20 +1629,21 @@ function getJeepHeadTargetPx(
   vPhys: { spawnY: number; wheelRadius: number; wheelbase: number },
   imgW = 1829,
   imgH = 784,
+  tuning: VehicleArtTuning = getVehicleArtTuning("jeep", false),
 ) {
-  const { bodyX, bodyY, bodyW, bodyH } = getJeepBodyLayout(vPhys, imgW, imgH);
+  const { bodyX, bodyY, bodyW, bodyH } = getJeepBodyLayout(vPhys, imgW, imgH, tuning);
   return {
-    x: bodyX + JEEP_HEAD_MANUAL.xPct * bodyW + JEEP_HEAD_MANUAL.offsetXPx,
-    y: bodyY + JEEP_HEAD_MANUAL.yPct * bodyH + JEEP_HEAD_MANUAL.offsetYPx,
+    x: bodyX + JEEP_HEAD_MANUAL.xPct * bodyW + tuning.headOffsetXPx,
+    y: bodyY + JEEP_HEAD_MANUAL.yPct * bodyH + tuning.headOffsetYPx,
   };
 }
 
-function getSportsCarBodyLayout(vPhys: { spawnY: number; wheelRadius: number; wheelbase: number }, imgW: number, imgH: number) {
+function getSportsCarBodyLayout(vPhys: { spawnY: number; wheelRadius: number; wheelbase: number }, imgW: number, imgH: number, tuning: VehicleArtTuning = getVehicleArtTuning("sportsCar", false)) {
   const wheelRestY = (vPhys.spawnY - (vPhys.wheelRadius + 0.2)) * SCALE;
-  const bodyW = ((vPhys.wheelbase * SCALE) * 2) / SPORTS_CAR_WHEEL_SEPARATION_PCT;
+  const bodyW = (((vPhys.wheelbase * SCALE) * 2) / SPORTS_CAR_WHEEL_SEPARATION_PCT) * tuning.bodyScale;
   const bodyH = bodyW * (imgH / imgW);
-  const bodyX = (-vPhys.wheelbase * SCALE) - SPORTS_CAR_REAR_WHEEL_X_PCT * bodyW;
-  const bodyY = wheelRestY - SPORTS_CAR_WHEEL_Y_PCT * bodyH;
+  const bodyX = (-vPhys.wheelbase * SCALE) - SPORTS_CAR_REAR_WHEEL_X_PCT * bodyW + tuning.bodyOffsetXPx;
+  const bodyY = wheelRestY - SPORTS_CAR_WHEEL_Y_PCT * bodyH + tuning.bodyOffsetYPx;
   return { bodyX, bodyY, bodyW, bodyH };
 }
 
@@ -1583,16 +1651,13 @@ function getSportsCarHeadTargetPx(
   vPhys: { spawnY: number; wheelRadius: number; wheelbase: number },
   imgW = 1024,
   imgH = 295,
+  tuning: VehicleArtTuning = getVehicleArtTuning("sportsCar", false),
 ) {
-  const bodyW = ((vPhys.wheelbase * SCALE) * 2) / SPORTS_CAR_WHEEL_SEPARATION_PCT;
-  const bodyH = bodyW * (imgH / imgW);
-  const wheelRestY = (vPhys.spawnY - (vPhys.wheelRadius + 0.2)) * SCALE;
-  const bodyX = (-vPhys.wheelbase * SCALE) - SPORTS_CAR_REAR_WHEEL_X_PCT * bodyW;
-  const bodyY = wheelRestY - SPORTS_CAR_WHEEL_Y_PCT * bodyH;
+  const { bodyX, bodyY, bodyW, bodyH } = getSportsCarBodyLayout(vPhys, imgW, imgH, tuning);
 
   return {
-    x: bodyX + SPORTS_CAR_HEAD_MANUAL.xPct * bodyW + SPORTS_CAR_HEAD_MANUAL.offsetXPx,
-    y: bodyY + SPORTS_CAR_HEAD_MANUAL.yPct * bodyH + SPORTS_CAR_HEAD_MANUAL.offsetYPx,
+    x: bodyX + SPORTS_CAR_HEAD_MANUAL.xPct * bodyW + tuning.headOffsetXPx,
+    y: bodyY + SPORTS_CAR_HEAD_MANUAL.yPct * bodyH + tuning.headOffsetYPx,
   };
 }
 
@@ -1608,9 +1673,10 @@ function getHeadLocal(vehicleId: VehicleId) {
   return Vec2(-0.25, 0.75);
 }
 
-function drawVehicle(ctx: CanvasRenderingContext2D, toScreen: (v: planck.Vec2) => { x: number; y: number }, car: CarRig, dpr: number, headId: HeadId, headImg: HTMLImageElement | null, headImg2: HTMLImageElement | null, jeepBodyImg: HTMLImageElement | null, jeepWheelImg: HTMLImageElement | null, sportsCarBodyImg: HTMLImageElement | null, sportsCarWheelImg: HTMLImageElement | null, miniMode: boolean, vehicleId: VehicleId, screenGroundY: number) {
+function drawVehicle(ctx: CanvasRenderingContext2D, toScreen: (v: planck.Vec2) => { x: number; y: number }, car: CarRig, dpr: number, headId: HeadId, headImg: HTMLImageElement | null, headImg2: HTMLImageElement | null, jeepBodyImg: HTMLImageElement | null, jeepWheelImg: HTMLImageElement | null, sportsCarBodyImg: HTMLImageElement | null, sportsCarWheelImg: HTMLImageElement | null, miniMode: boolean, isPhoneViewport: boolean, vehicleId: VehicleId, screenGroundY: number) {
   const chassis = car.chassis; const p = chassis.getPosition(); const a = chassis.getAngle(); const sp = toScreen(p);
   const vPhys = VEHICLES[vehicleId].physics; const vVis = VEHICLES[vehicleId].visual;
+  const artTuning = getVehicleArtTuning(vehicleId, isPhoneViewport);
 
   if (!miniMode) {
     const heightDiff = Math.max(0, screenGroundY - sp.y);
@@ -1621,20 +1687,18 @@ function drawVehicle(ctx: CanvasRenderingContext2D, toScreen: (v: planck.Vec2) =
   }
 
   if (vehicleId === "sportsCar" && sportsCarWheelImg && sportsCarWheelImg.complete) {
-    drawSportsCarWheel(ctx, toScreen(car.wheel1.getPosition()), car.wheel1.getAngle(), vPhys.wheelRadius, dpr, sportsCarWheelImg);
-    drawSportsCarWheel(ctx, toScreen(car.wheel2.getPosition()), car.wheel2.getAngle(), vPhys.wheelRadius, dpr, sportsCarWheelImg);
+    drawSportsCarWheel(ctx, toScreen(car.wheel1.getPosition()), car.wheel1.getAngle(), vPhys.wheelRadius, dpr, sportsCarWheelImg, artTuning.wheelSizeMult, artTuning.rearWheelOffsetXPx, artTuning.wheelOffsetYPx);
+    drawSportsCarWheel(ctx, toScreen(car.wheel2.getPosition()), car.wheel2.getAngle(), vPhys.wheelRadius, dpr, sportsCarWheelImg, artTuning.wheelSizeMult, artTuning.frontWheelOffsetXPx, artTuning.wheelOffsetYPx);
   } else if (vehicleId === "jeep" && jeepWheelImg && jeepWheelImg.complete) {
-    drawJeepWheel(ctx, toScreen(car.wheel1.getPosition()), car.wheel1.getAngle(), chassis.getAngle(), vPhys.wheelRadius, dpr, jeepWheelImg, JEEP_WHEEL_MANUAL.rearOffsetXPx);
-    drawJeepWheel(ctx, toScreen(car.wheel2.getPosition()), car.wheel2.getAngle(), chassis.getAngle(), vPhys.wheelRadius, dpr, jeepWheelImg, JEEP_WHEEL_MANUAL.frontOffsetXPx);
+    drawJeepWheel(ctx, toScreen(car.wheel1.getPosition()), car.wheel1.getAngle(), chassis.getAngle(), vPhys.wheelRadius, dpr, jeepWheelImg, artTuning.rearWheelOffsetXPx, artTuning.wheelOffsetYPx, artTuning.wheelSizeMult);
+    drawJeepWheel(ctx, toScreen(car.wheel2.getPosition()), car.wheel2.getAngle(), chassis.getAngle(), vPhys.wheelRadius, dpr, jeepWheelImg, artTuning.frontWheelOffsetXPx, artTuning.wheelOffsetYPx, artTuning.wheelSizeMult);
   } else {
     drawWheel(ctx, toScreen(car.wheel1.getPosition()), car.wheel1.getAngle(), vPhys.wheelRadius, dpr);
     drawWheel(ctx, toScreen(car.wheel2.getPosition()), car.wheel2.getAngle(), vPhys.wheelRadius, dpr);
   }
 
   ctx.save(); ctx.translate(sp.x, sp.y); ctx.rotate(-a);
-  const BODY_BASE_PX_PER_M = 45;
-  const usesPixelMatchedArtwork = vehicleId === "jeep" || vehicleId === "sportsCar";
-  const bodyScale = miniMode && !usesPixelMatchedArtwork ? (SCALE / BODY_BASE_PX_PER_M) : 1;
+  const BODY_BASE_PX_PER_M = 45; const bodyScale = miniMode ? (SCALE / BODY_BASE_PX_PER_M) : 1;
   ctx.scale(dpr * bodyScale, dpr * bodyScale);
 
   if (vehicleId === "bicycle") {
@@ -1773,7 +1837,7 @@ function drawVehicle(ctx: CanvasRenderingContext2D, toScreen: (v: planck.Vec2) =
     if (sportsCarBodyImg && sportsCarBodyImg.complete) {
       // Pixel-matched to the supplied artwork: the body is scaled from the two wheel-hole centers,
       // so the physics wheel bodies stay visually inside the arches instead of drifting by eye.
-      const { bodyX, bodyY, bodyW, bodyH } = getSportsCarBodyLayout(vPhys, sportsCarBodyImg.naturalWidth, sportsCarBodyImg.naturalHeight);
+      const { bodyX, bodyY, bodyW, bodyH } = getSportsCarBodyLayout(vPhys, sportsCarBodyImg.naturalWidth, sportsCarBodyImg.naturalHeight, artTuning);
       ctx.save();
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = "high";
@@ -1803,7 +1867,7 @@ function drawVehicle(ctx: CanvasRenderingContext2D, toScreen: (v: planck.Vec2) =
   }
   else if (vehicleId === "jeep") {
     if (jeepBodyImg && jeepBodyImg.complete) {
-      const { bodyX, bodyY, bodyW, bodyH } = getJeepBodyLayout(vPhys, jeepBodyImg.naturalWidth, jeepBodyImg.naturalHeight);
+      const { bodyX, bodyY, bodyW, bodyH } = getJeepBodyLayout(vPhys, jeepBodyImg.naturalWidth, jeepBodyImg.naturalHeight, artTuning);
       ctx.save();
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = "high";
@@ -1903,17 +1967,17 @@ function drawVehicle(ctx: CanvasRenderingContext2D, toScreen: (v: planck.Vec2) =
     if (vehicleId === "bicycle") { hx += 10; hy -= 32; }
     else if (vehicleId === "sportsCar") {
       const target = sportsCarBodyImg && sportsCarBodyImg.complete
-        ? getSportsCarHeadTargetPx(vPhys, sportsCarBodyImg.naturalWidth, sportsCarBodyImg.naturalHeight)
+        ? getSportsCarHeadTargetPx(vPhys, sportsCarBodyImg.naturalWidth, sportsCarBodyImg.naturalHeight, artTuning)
         : { x: cfg.x + 25, y: cfg.y + 64 };
-      headSize = Math.round(cfg.size * SPORTS_CAR_HEAD_MANUAL.sizeMult);
+      headSize = Math.round(cfg.size * artTuning.headSizeMult);
       hx = target.x - headSize / 2;
       hy = target.y - headSize / 2;
     }
     else if (vehicleId === "jeep") {
       const target = jeepBodyImg && jeepBodyImg.complete
-        ? getJeepHeadTargetPx(vPhys, jeepBodyImg.naturalWidth, jeepBodyImg.naturalHeight)
+        ? getJeepHeadTargetPx(vPhys, jeepBodyImg.naturalWidth, jeepBodyImg.naturalHeight, artTuning)
         : { x: cfg.x + 20, y: cfg.y + 52 };
-      headSize = Math.round(cfg.size * JEEP_HEAD_MANUAL.sizeMult);
+      headSize = Math.round(cfg.size * artTuning.headSizeMult);
       hx = target.x - headSize / 2;
       hy = target.y - headSize / 2;
     }
@@ -1932,12 +1996,14 @@ function drawJeepWheel(
   dpr: number,
   wheelImg: HTMLImageElement,
   offsetXPx: number,
+  offsetYPx: number,
+  sizeMult: number,
 ) {
   const c = Math.cos(-chassisAngle);
   const s = Math.sin(-chassisAngle);
-  const ox = (offsetXPx * c - JEEP_WHEEL_MANUAL.offsetYPx * s) * dpr;
-  const oy = (offsetXPx * s + JEEP_WHEEL_MANUAL.offsetYPx * c) * dpr;
-  const r = radiusM * SCALE * dpr * JEEP_WHEEL_MANUAL.sizeMult;
+  const ox = (offsetXPx * c - offsetYPx * s) * dpr;
+  const oy = (offsetXPx * s + offsetYPx * c) * dpr;
+  const r = radiusM * SCALE * dpr * sizeMult;
   ctx.save();
   ctx.translate(sp.x + ox, sp.y + oy);
   ctx.rotate(-wheelAngle);
@@ -1947,9 +2013,9 @@ function drawJeepWheel(
   ctx.restore();
 }
 
-function drawSportsCarWheel(ctx: CanvasRenderingContext2D, sp: { x: number; y: number }, ang: number, radiusM: number, dpr: number, wheelImg: HTMLImageElement) {
-  const r = radiusM * SCALE * dpr;
-  ctx.save(); ctx.translate(sp.x, sp.y); ctx.rotate(-ang);
+function drawSportsCarWheel(ctx: CanvasRenderingContext2D, sp: { x: number; y: number }, ang: number, radiusM: number, dpr: number, wheelImg: HTMLImageElement, sizeMult = 1, offsetXPx = 0, offsetYPx = 0) {
+  const r = radiusM * SCALE * dpr * sizeMult;
+  ctx.save(); ctx.translate(sp.x + offsetXPx * dpr, sp.y + offsetYPx * dpr); ctx.rotate(-ang);
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
   ctx.drawImage(wheelImg, -r, -r, r * 2, r * 2);
