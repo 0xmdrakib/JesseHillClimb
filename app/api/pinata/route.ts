@@ -20,6 +20,12 @@ function parseDataUrl(dataUrl: string): { mime: string; bytes: Uint8Array } {
   return { mime, bytes: new Uint8Array(buf) };
 }
 
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const arrayBuffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(arrayBuffer).set(bytes);
+  return arrayBuffer;
+}
+
 export async function POST(req: Request) {
   try {
     const body = (await req.json()) as Body;
@@ -63,7 +69,7 @@ export async function POST(req: Request) {
 
     // 1) Pin image
     const imgForm = new FormData();
-    const imgBlob = new Blob([bytes], { type: mime || "image/png" });
+    const imgBlob = new Blob([toArrayBuffer(bytes)], { type: mime || "image/png" });
     imgForm.append("file", imgBlob, `run_${tokenId}.png`);
 
     const imgRes = await fetch("https://api.pinata.cloud/pinning/pinFileToIPFS", {
