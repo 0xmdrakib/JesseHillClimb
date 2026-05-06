@@ -1,25 +1,132 @@
-Just lunched: Jesse Hill Climb 🚗⛰️ — A physics hill-climb game built as a https://x.com/base Mini App & web app.
+# Jesse Hill Climb
 
-• Play game and Swap driver heads anytime between @jessepollak and @brian_armstrong
-• And you can save the moment before crash in game by minting a NFT
+Jesse Hill Climb is a physics-based hill climb racing game built as a Base Mini App and web app, with optional onchain score saving and run NFT minting on Base.
 
-Play this inside base app or in web: https://jessehillclimb.online
+**Live app:** https://jessehillclimb.online
 
-How to play:
-• Hold GAS to climb
-• Use BRAKE to control rotation
-• Watch fuel + collect coins
-• You can rotate 180° in mobile
-Goal: beat your best meters.
+---
 
-Onchain features (Base):
-• Save your best distance onchain
-• Mint your run as an NFT (a collectible for your best moments)
-• Scroll the Crash page in mini app for save score or for minting nft
+## Overview
 
-Customization + UX:
-• Swap driver heads anytime
-• Mini-app / mobile / desktop friendly layout + smooth controls
-• Also work in web 
+Jesse Hill Climb turns the classic hill-climb driving loop into a Base-native mini game. Players drive as far as possible across rough terrain, manage fuel, collect coins, unlock upgrades, and save their best runs onchain.
 
-I hope base community will love this❤️
+The game is designed to work inside Base/Farcaster mini app clients and also in a normal web browser. It supports mobile-friendly controls, wallet connection, onchain score submission, and collectible run NFTs generated from the crash snapshot.
+
+## Features
+
+- Physics-based hill climb gameplay with gas and brake controls
+- Swappable driver heads between **Jesse** and **Brian**
+- Multiple vehicles including Jeep, Drift Bike, and Sports Car
+- Multiple maps with different terrain behavior, gravity, grip, and visual style
+- Local coin system for vehicle unlocks and upgrades
+- Upgrade categories for engine, suspension, tires, and fuel tank
+- Achievement system with coin rewards
+- Onchain best-score saving on Base mainnet
+- Run NFT minting with distance, driver, image snapshot, and metadata
+- Pinata/IPFS metadata upload support for minted run NFTs
+- Farcaster/Base Mini App support with splash handling, share casting, and add-app action
+- Optional paymaster proxy flow for sponsored contract transactions
+- Builder Code attribution support through ERC-8021 calldata suffixing
+
+## Supported chain
+
+- Base mainnet
+
+## Gameplay behavior
+
+### Driving
+
+Players hold **GAS** to accelerate and use **BRAKE** to control rotation. The goal is to travel as far as possible without crashing or running out of fuel.
+
+### Vehicles
+
+The game includes different vehicle types with separate handling profiles:
+
+- **Jeep:** balanced off-road vehicle
+- **Drift Bike:** lighter and more agile, but easier to flip
+- **Sports Car:** faster, but less forgiving on rough terrain
+
+### Maps
+
+Players can choose from multiple environments:
+
+- Countryside
+- Desert
+- Arctic
+- Moon
+
+Each map changes the driving feel through terrain, gravity, grip, fog, snow, dust, or low-gravity effects.
+
+### Progression
+
+Coins are stored locally and can be used to unlock vehicles and buy upgrades. Achievements reward extra coins for milestones such as first run, distance goals, flips, speed, fuel efficiency, coin collection, and map-specific challenges.
+
+## Onchain behavior
+
+### Score saving
+
+After a run ends, players can connect a wallet and save their score to the deployed scoreboard contract on Base. The contract stores each player’s best distance in meters and emits an event for every score submission.
+
+### Run NFT minting
+
+Players can mint a crashed run as an NFT. The app captures a run snapshot, prepares metadata with the selected driver and distance, uploads metadata through Pinata when configured, and mints through the deployed run NFT contract.
+
+### Gasless support
+
+If the connected wallet supports paymaster services and the paymaster proxy is configured, score saving and NFT minting can use the sponsored transaction path. If sponsorship is unavailable, the app falls back to normal wallet transactions.
+
+## Tech stack
+
+- Next.js 16
+- React 19
+- TypeScript
+- planck-js
+- viem
+- Farcaster Mini App SDK
+- Solidity
+- Base mainnet
+- Pinata/IPFS
+
+---
+
+## Getting started
+
+### 1. Install dependencies
+
+```bash
+npm install
+```
+
+### 2. Configure environment variables
+
+Create a `.env` file in the project root. Then copy the values from [.env.example](./.env.example) and fill them in.
+
+### 3. Run the development server
+
+```bash
+npm run dev
+```
+
+Open `http://localhost:3000` in your browser.
+
+### 4. Build for production
+
+```bash
+npm run build
+npm run start
+```
+
+## Contracts
+
+The project includes two Solidity contracts:
+
+- `JesseHillClimbScoreboard.sol` — stores the best score per wallet
+- `JesseHillClimbRunNFT.sol` — mints collectible run NFTs with score and driver metadata
+
+Deploy both contracts on Base mainnet, then add the deployed addresses to `.env`.
+
+---
+
+## License
+
+This project is licensed under the [MIT License](./LICENSE).
